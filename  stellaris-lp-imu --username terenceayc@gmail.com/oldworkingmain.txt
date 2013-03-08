@@ -1,0 +1,483 @@
+#include "common.h"
+#include "i2c_IMU.h"
+#include "imu.h"
+#include "adxl345.h"
+#include "l3g4200d.h"
+#include "hmc5883l.h"
+#include "stdio_console.h"
+#include "utils/uartstdio.h"
+#include "tmrsys.h"
+#include "cpu.h"
+
+void mcu_Config(void);
+
+
+char gszBuf[80];
+
+#define MAX_CALIB_SAMPLES   100
+
+int gXBuf[MAX_CALIB_SAMPLES];
+int gYBuf[MAX_CALIB_SAMPLES];
+int gZBuf[MAX_CALIB_SAMPLES];
+
+
+int gAXRawAvg, gAYRawAvg, gAZRawAvg;
+int gGXRawAvg, gGYRawAvg, gGZRawAvg;
+int gMXRawAvg, gMYRawAvg, gMZRawAvg;
+float gAXC, gAYC, gAZC;
+float gGXC, gGYC, gGZC;
+float gMXC, gMYC, gMZC;
+
+#define MAX_AVG_SAMPLES 8
+#define NUM_AVG_SAMPLES 4
+
+int gAXBuf[MAX_AVG_SAMPLES];
+int gAYBuf[MAX_AVG_SAMPLES];
+int gAZBuf[MAX_AVG_SAMPLES];
+int gMXBuf[MAX_AVG_SAMPLES];
+int gMYBuf[MAX_AVG_SAMPLES];
+int gMZBuf[MAX_AVG_SAMPLES];
+int gGXBuf[MAX_AVG_SAMPLES];
+int gGYBuf[MAX_AVG_SAMPLES];
+int gGZBuf[MAX_AVG_SAMPLES];
+
+float gQuaternion[4];
+float gYPR[3];
+float gYPRref[3];
+
+int gnVersionNum = 86;
+
+void ui_HandleCorruptUserParams(void);
+void ui_ReadUserParams(void);
+void ui_SetDefaultUserParams(void);
+void ui_HMC5883LCalibrate(void);
+void ui_ADXL345Calibrate(void);
+void ui_L3GCalibrate(void);
+void util_SerialPrintYPR(float ypr[]);
+void util_GetXYLogical(volatile int* pX, volatile int* pY);
+void util_FillAveragingBuffers(void);
+
+volatile int xcounter = 0;
+volatile int ycounter = 0;
+
+
+u08 gNvdBuf[100];
+
+#define nvd_Init() 0
+#define nvd_ClearMemory()
+#define nvd_UpdateFlash()
+
+#define ui_BtnClear()   gbBtnPressed = 0
+
+int main (void) {
+    int smpCnt = 0;
+
+#if 0
+	while(1){
+		CPUwfi();
+		}
+#endif
+
+	mcu_Config();
+#if DEBUG
+    DELAY_MS(1000);
+    DELAY_MS(1000);
+    DELAY_MS(1000);
+    UARTprintf("IMU Version %d.%02d\r\n", gnVersionNum/100,gnVersionNum%100);
+    if (nvd_Init()) {
+        ui_ReadUserParams();
+        DELAY_MS(1000);
+        }
+    else {
+        ui_HandleCorruptUserParams();
+        }
+#endif
+
+    ui_SetDefaultUserParams();
+    imu_Init();
+#if DEBUG
+    UARTprintf("To calibrate accelerometer, press button within 3 seconds!\r\n");
+    if (util_WaitBtnPressTimeout(3)) {
+        ui_ADXL345Calibrate();
+        }
+
+    UARTprintf("To calibrate compass, press button within 3 seconds!\r\n");
+    if (util_WaitBtnPressTimeout(3)) {
+        ui_HMC5883LCalibrate();
+        }
+
+    UARTprintf("To calibrate gyroscope, press button within 3 seconds!\r\n");
+    if (util_WaitBtnPressTimeout(3)) {
+        ui_L3GCalibrate();
+        }
+    DELAY_MS(1000);
+#endif
+    util_FillAveragingBuffers();
+
+    while (1) {
+		CPUwfi();
+		;
+        if (gbSysTickFlag) {
+            gbSysTickFlag = 0;
+            adxl345_ReadXYZRawData(&gAXBuf[smpCnt], &gAYBuf[smpCnt], &gAZBuf[smpCnt]);
+            l3g_ReadXYZRawData(&gGXBuf[smpCnt], &gGYBuf[smpCnt], &gGZBuf[smpCnt]);
+            hmc5883l_ReadXYZRawData(&gMXBuf[smpCnt], &gMYBuf[smpCnt], &gMZBuf[smpCnt]);
+
+            gAXRawAvg = util_AverageSamples(gAXBuf,NUM_AVG_SAMPLES);
+            gAYRawAvg = util_AverageSamples(gAYBuf,NUM_AVG_SAMPLES);
+            gAZRawAvg = util_AverageSamples(gAZBuf,NUM_AVG_SAMPLES);
+
+            gGXRawAvg = util_AverageSamples(gGXBuf,NUM_AVG_SAMPLES);
+            gGYRawAvg = util_AverageSamples(gGYBuf,NUM_AVG_SAMPLES);
+            gGZRawAvg = util_AverageSamples(gGZBuf,NUM_AVG_SAMPLES);
+
+            gMXRawAvg = util_AverageSamples(gMXBuf,NUM_AVG_SAMPLES);
+            gMYRawAvg = util_AverageSamples(gMYBuf,NUM_AVG_SAMPLES);
+            gMZRawAvg = util_AverageSamples(gMZBuf,NUM_AVG_SAMPLES);
+
+            adxl345_GetCorrectedData(gAXRawAvg, gAYRawAvg, gAZRawAvg, &gAXC, &gAYC, &gAZC);
+            l3g_GetCorrectedData(gGXRawAvg, gGYRawAvg, gGZRawAvg, &gGXC, &gGYC, &gGZC);
+            hmc5883l_GetCorrectedData(gMXRawAvg, gMYRawAvg, gMZRawAvg, &gMXC, &gMYC, &gMZC);
+
+            imu_UpdateData(gAXC, gAYC, gAZC, gGXC, gGYC, gGZC, gMXC, gMYC, gMZC);
+            //imu_GetQ(gQuaternion);
+            imu_GetYawPitchRoll(gYPR);
+            util_GetXYLogical(&xcounter, &ycounter);
+            if (gnTick == 0)
+            	LED_TOGGLE(RED);
+             //util_SerialPrintQuaternion(gQuaternion);
+//             util_SerialPrintYPR(gYPR);
+            smpCnt++;
+            if (smpCnt == NUM_AVG_SAMPLES) smpCnt = 0;
+
+            if (gbBtnPressed) {
+            	gbBtnPressed = 0;
+            	gYPRref[0] = gYPR[0];
+            	gYPRref[1] = gYPR[1];
+            	gYPRref[2] = gYPR[2];
+            	}
+            }
+        }
+}
+
+void util_FillAveragingBuffers(void){
+	int x,y,z,cnt;
+
+    adxl345_GetAveragedRawData(4, &x, &y, &z);
+	for (cnt = 0; cnt < NUM_AVG_SAMPLES; cnt++) {
+		gAXBuf[cnt] = x;
+		gAYBuf[cnt] = y;
+		gAZBuf[cnt] = z;
+		}
+	l3g_GetAveragedRawData(4,&x, &y, &z);
+	for (cnt = 0; cnt < NUM_AVG_SAMPLES; cnt++) {
+		gGXBuf[cnt] = x;
+		gGYBuf[cnt] = y;
+		gGZBuf[cnt] = z;
+		}
+	hmc5883l_GetAveragedRawData(4,&x, &y, &z);
+	for (cnt = 0; cnt < NUM_AVG_SAMPLES; cnt++) {
+		gMXBuf[cnt] = x;
+		gMYBuf[cnt] = y;
+		gMZBuf[cnt] = z;
+		}
+	}
+
+void util_GetXYLogical(volatile int* pX, volatile int* pY) {
+	int yaw,pitch,roll,x,y;
+
+	yaw = (int)(gYPR[0] - gYPRref[0]);
+	CLAMP(yaw,-45,45);
+	//*pX = ((yaw+45)*32767)/90;
+	//CLAMP(*pX,0,32767);
+
+	roll = (int)(gYPR[2] - gYPRref[2]);
+	CLAMP(roll,-45,45);
+	x = ((roll+45)*32767)/90;
+	CLAMP(x,0,32767);
+
+	pitch = (int)(gYPR[1] - gYPRref[1]);
+	CLAMP(pitch,-45,45);
+	y = ((-pitch+45)*32767)/90;
+	CLAMP(y,0,32767);
+//	__disable_irq();
+	*pX = x;
+	*pY = y;
+//	__enable_irq();
+	}
+
+int util_WaitBtnPressTimeout(int seconds) {
+	u32 tick,delayTicks;
+	delayTicks = (seconds*1000)/TMRSYS_TICK_MS;
+	tick = gnSysTick;
+	gbBtnPressed = 0;
+    while ((!gbBtnPressed) && ((gnSysTick - tick) <  delayTicks)) ;;
+    if (gbBtnPressed) {
+    	gbBtnPressed = 0;
+    	return 1;
+    	}
+    else {
+    	return 0;
+    	}
+	}
+
+
+void util_SerialPrintQuaternion(float q[]) {
+    int inx;
+    for(inx = 0; inx < 4; inx++) {
+//        util_SerialPrintFloatAsHex(q[inx]);
+        UARTprintf(",");
+        }
+    UARTprintf("\r");
+    UARTprintf("\n");
+    }
+
+
+void util_SerialPrintYPR(float ypr[]) {
+	UARTprintf("Y %3.2f P %3.2f R %3.2f\r\n",ypr[0], ypr[1], ypr[2]);
+    }
+
+void util_SerialPrintFloatAsHex(float f) {
+    int i;
+    u08 b1,b2;
+    char c1,c2;
+    u08 * pb;
+    pb = (u08 *) &f;
+    for(i = 0; i < 4; i++) {
+        b1 = (pb[i] >> 4) & 0x0f;
+        b2 = (pb[i] & 0x0f);
+
+        c1 = (b1 < 10) ? ('0' + b1) : 'A' + b1 - 10;
+        c2 = (b2 < 10) ? ('0' + b2) : 'A' + b2 - 10;
+
+        UARTprintf("%c",c1);
+        UARTprintf("%c",c2);
+        }
+    }
+
+void ui_HandleCorruptUserParams(void) {
+	UARTprintf("Memory corrupt, press C to clear\r\n");
+    while(!gbBtnPressed) ;
+    ui_BtnClear();
+    ui_SetDefaultUserParams();
+    UARTprintf("Done!\r\n");
+    }
+
+
+void ui_SetDefaultUserParams(void) {
+    gADXL345.calib.x0g = -181;
+    gADXL345.calib.y0g = -279;
+    gADXL345.calib.xp1g = 158;
+    gADXL345.calib.xm1g = -487;
+    gADXL345.calib.yp1g = 41;
+    gADXL345.calib.ym1g = -587;
+    gADXL345.calib.zp1g = 1316;
+    gADXL345.calib.zm1g = 732;
+
+    gHMC5883L.calib.xMax = 806;
+    gHMC5883L.calib.xMin = -460;
+    gHMC5883L.calib.yMax = 402;
+    gHMC5883L.calib.yMin = -937;
+    gHMC5883L.calib.zMax = 669;
+    gHMC5883L.calib.zMin = -624;
+
+    gHMC5883L.xRange = gHMC5883L.calib.xMax - gHMC5883L.calib.xMin;
+    gHMC5883L.yRange = gHMC5883L.calib.yMax - gHMC5883L.calib.yMin;
+    gHMC5883L.zRange = gHMC5883L.calib.zMax - gHMC5883L.calib.zMin;
+
+    gL3G.calib.xOffset = 19;
+    gL3G.calib.xOffsetSigma = 9;
+    gL3G.calib.yOffset = 12;
+    gL3G.calib.yOffsetSigma = 9;
+    gL3G.calib.zOffset = 14;
+    gL3G.calib.zOffsetSigma = 9;
+
+    gL3G.xThreshold = 3*gL3G.calib.xOffsetSigma;
+    gL3G.yThreshold = 3*gL3G.calib.yOffsetSigma;
+    gL3G.zThreshold = 3*gL3G.calib.zOffsetSigma;
+
+    nvd_ClearMemory();
+    util_MemCpy(gNvdBuf, (u08*)&(gADXL345.calib.x0g), sizeof(gADXL345.calib));
+    util_MemCpy(gNvdBuf+sizeof(gADXL345.calib), (u08*)&(gHMC5883L.calib.xMax), sizeof(gHMC5883L.calib));
+    util_MemCpy(gNvdBuf+sizeof(gADXL345.calib)+sizeof(gHMC5883L.calib), (u08*)&(gL3G.calib.xOffset), sizeof(gL3G.calib));
+    nvd_UpdateFlash();
+    }
+
+void ui_ReadUserParams(void) {
+    util_MemCpy((u08*)&(gADXL345.calib.x0g), gNvdBuf, sizeof(gADXL345.calib));
+
+    util_MemCpy((u08*)&(gHMC5883L.calib.xMax), gNvdBuf+sizeof(gADXL345.calib), sizeof(gHMC5883L.calib));
+    gHMC5883L.xRange = gHMC5883L.calib.xMax - gHMC5883L.calib.xMin;
+    gHMC5883L.yRange = gHMC5883L.calib.yMax - gHMC5883L.calib.yMin;
+    gHMC5883L.zRange = gHMC5883L.calib.zMax - gHMC5883L.calib.zMin;
+
+    util_MemCpy((u08*)&(gL3G.calib.xOffset), gNvdBuf+sizeof(gADXL345.calib)+sizeof(gHMC5883L.calib), sizeof(gL3G.calib) );
+    gL3G.xThreshold = 3*gL3G.calib.xOffsetSigma;
+    gL3G.yThreshold = 3*gL3G.calib.yOffsetSigma;
+    gL3G.zThreshold = 3*gL3G.calib.zOffsetSigma;
+
+    UARTprintf("ADXL345 Accelerometer Calibration Data\r\n");
+    UARTprintf(" x0g = %d\r\n",  gADXL345.calib.x0g);
+    UARTprintf(" y0g = %d\r\n",  gADXL345.calib.y0g);
+    UARTprintf(" xp1g = %d\r\n",  gADXL345.calib.xp1g);
+    UARTprintf(" xm1g = %d\r\n",  gADXL345.calib.xm1g);
+    UARTprintf(" yp1g = %d\r\n",  gADXL345.calib.yp1g);
+    UARTprintf(" ym1g = %d\r\n",  gADXL345.calib.ym1g);
+    UARTprintf(" zp1g = %d\r\n",  gADXL345.calib.zp1g);
+    UARTprintf(" zm1g = %d\r\n\r\n",  gADXL345.calib.zm1g);
+    UARTprintf("HMC5883L Compass Calibration Data\r\n");
+    UARTprintf(" xMax = %d xMin = %d\r\n",  gHMC5883L.calib.xMax, gHMC5883L.calib.xMin);
+    UARTprintf(" yMax = %d yMin = %d\r\n",  gHMC5883L.calib.yMax, gHMC5883L.calib.yMin);
+    UARTprintf(" zMax = %d zMin = %d\r\n\r\n",  gHMC5883L.calib.zMax, gHMC5883L.calib.zMin);
+    UARTprintf("L3G4200D Gyroscope Calibration Data\r\n");
+    UARTprintf(" xOffset = %d xOffsetSigma = %d\r\n",  gL3G.calib.xOffset, gL3G.calib.xOffsetSigma);
+    UARTprintf(" yOffset = %d yOffsetSigma = %d\r\n",  gL3G.calib.yOffset, gL3G.calib.yOffsetSigma);
+    UARTprintf(" zOffset = %d zOffsetSigma = %d\r\n\r\n",  gL3G.calib.zOffset, gL3G.calib.zOffsetSigma);
+    }
+
+
+// Ensure the OFSTX,Y,Z registers are set to 0
+// Step A
+// Place each axis in +1g and -1g orientation and get the test axis
+// raw 13bit 2's complement averaged readings
+// (total 6 readings, 2 per axis)
+// The difference of the +1g and -1g readings divided by 2 is the axis sensitivity in LSB/g
+// The inverse of the sensitivity is the axis scale factor in g's
+
+// Step B
+// Place board horizontally and get the X,Y and Z averaged readings
+// The X and Y readings are in 0g, therefore these are the 0g offsets. Subtract them from
+// the X and Y raw readigs to get the corrected X and Y readings
+// The Z reading is in +1g, so subtract the Z sensitivity (LSb/g) found in Step A
+// to get the Z axis 0g offset.
+// Subtract the Z axis 0g offset from the Z raw reading to get the
+// corrected Z reading.
+//
+// To get the acceleration in g's, multiply the (0g corrected) sensor output by the scale
+// To get the acceleration in cm/s*s, multiply the g's by by 980cm/s*s
+
+
+void ui_ADXL345Calibrate(void) {
+    int x,y,z;
+    UARTprintf("Orient board Z axis UP and hit C\r\n");
+    while (!gbBtnPressed) ;;
+    gbBtnPressed = 0;
+    adxl345_GetAveragedRawData(10, &x, &y, &z);
+    gADXL345.calib.x0g = x;
+    gADXL345.calib.y0g = y;
+    gADXL345.calib.zp1g = z;
+
+    UARTprintf("Orient board Z axis DOWN and hit C\r\n");
+    while (!gbBtnPressed) ;
+    gbBtnPressed = 0;
+    adxl345_GetAveragedRawData(10, &x, &y, &z);
+    gADXL345.calib.zm1g = z;
+
+    UARTprintf("Orient board X axis UP and hit C\r\n");
+    while (!gbBtnPressed) ;
+    gbBtnPressed = 0;
+    adxl345_GetAveragedRawData(10,&x, &y, &z);
+    gADXL345.calib.xp1g = x;
+
+    UARTprintf("Orient board X axis DOWN and hit C\r\n");
+    while (!gbBtnPressed) ;
+    gbBtnPressed = 0;
+    adxl345_GetAveragedRawData(10,&x, &y, &z);
+    gADXL345.calib.xm1g = x;
+
+    UARTprintf("Orient board Y axis UP and hit C\r\n");
+    while (!gbBtnPressed) ;
+    gbBtnPressed = 0;
+    adxl345_GetAveragedRawData(10,&x, &y, &z);
+    gADXL345.calib.yp1g = y;
+
+    UARTprintf("Orient board Y axis DOWN and hit C\r\n");
+    while (!gbBtnPressed) ;
+    gbBtnPressed = 0;
+    adxl345_GetAveragedRawData(10,&x, &y, &z);
+    gADXL345.calib.ym1g = y;
+
+    UARTprintf("ADXL345 Accelerometer Calibration Data\r\n");
+    UARTprintf(" x0g = %d\r\n",  gADXL345.calib.x0g);
+    UARTprintf(" y0g = %d\r\n",  gADXL345.calib.y0g);
+    UARTprintf(" xp1g = %d\r\n",  gADXL345.calib.xp1g);
+    UARTprintf(" xm1g = %d\r\n",  gADXL345.calib.xm1g);
+    UARTprintf(" yp1g = %d\r\n",  gADXL345.calib.yp1g);
+    UARTprintf(" ym1g = %d\r\n",  gADXL345.calib.ym1g);
+    UARTprintf(" zp1g = %d\r\n",  gADXL345.calib.zp1g);
+    UARTprintf(" zm1g = %d\r\n",  gADXL345.calib.zm1g);
+
+    util_MemCpy(gNvdBuf, (u08*)&(gADXL345.calib.x0g), sizeof(gADXL345.calib));
+    nvd_UpdateFlash();
+    }
+
+
+
+void ui_HMC5883LCalibrate(void) {
+    UARTprintf("Orient in all directions slowly. If you know roughly where north is, try to point\r\n");
+    UARTprintf("each axis (+ and -) of the board towards north and shift the board slightly in all directions\r\n");
+    UARTprintf("around this approximate position. The goal is to get the max and min values for each axis\r\n");
+    UARTprintf("Press C when ready to start\r\n");
+    while (!gbBtnPressed) ;;
+    gbBtnPressed = 0;
+    UARTprintf("Calibrating, Press C after you are done orienting the board with all axes ...\r\n");
+
+    gHMC5883L.calib.xMax = gHMC5883L.calib.yMax = gHMC5883L.calib.zMax = -32768;
+    gHMC5883L.calib.xMin = gHMC5883L.calib.yMin =  gHMC5883L.calib.zMin = 32767;
+
+    while (!gbBtnPressed) {
+        hmc5883l_ReadXYZRawData(&gMXRawAvg, &gMYRawAvg, &gMZRawAvg);
+        if (gMXRawAvg > gHMC5883L.calib.xMax) gHMC5883L.calib.xMax = gMXRawAvg;
+        if (gMYRawAvg > gHMC5883L.calib.yMax) gHMC5883L.calib.yMax = gMYRawAvg;
+        if (gMZRawAvg > gHMC5883L.calib.zMax) gHMC5883L.calib.zMax = gMZRawAvg;
+        if (gMXRawAvg < gHMC5883L.calib.xMin) gHMC5883L.calib.xMin = gMXRawAvg;
+        if (gMYRawAvg < gHMC5883L.calib.yMin) gHMC5883L.calib.yMin = gMYRawAvg;
+        if (gMZRawAvg < gHMC5883L.calib.zMin) gHMC5883L.calib.zMin = gMZRawAvg;
+        DELAY_MS(HMC5883L_MEAS_DELAY_MS);
+        }
+    gbBtnPressed = 0;
+    gHMC5883L.xRange = gHMC5883L.calib.xMax - gHMC5883L.calib.xMin;
+    gHMC5883L.yRange = gHMC5883L.calib.yMax - gHMC5883L.calib.yMin;
+    gHMC5883L.zRange = gHMC5883L.calib.zMax - gHMC5883L.calib.zMin;
+
+    UARTprintf("HMC5883L Compass Calibration Data\r\n");
+    UARTprintf(" xMax = %d xMin = %d\r\n",  gHMC5883L.calib.xMax, gHMC5883L.calib.xMin);
+    UARTprintf(" yMax = %d yMin = %d\r\n",  gHMC5883L.calib.yMax, gHMC5883L.calib.yMin);
+    UARTprintf(" zMax = %d zMin = %d\r\n\r\n",  gHMC5883L.calib.zMax, gHMC5883L.calib.zMin);
+
+    util_MemCpy(gNvdBuf+sizeof(gADXL345.calib), (u08*)&(gHMC5883L.calib.xMax), sizeof(gHMC5883L.calib));
+    nvd_UpdateFlash();
+    }
+
+
+void ui_L3GCalibrate(void) {
+    UARTprintf("Orient board in neutral position and keep it still until calibration is complete\r\n");
+    UARTprintf("Press C when ready to start calibration\r\n");
+    while (!gbBtnPressed) ;
+    gbBtnPressed = 0;
+
+    l3g_GetCalibStatsRawData(100, &gL3G.calib.xOffset, &gL3G.calib.yOffset, &gL3G.calib.zOffset, &gL3G.calib.xOffsetSigma, &gL3G.calib.yOffsetSigma, &gL3G.calib.zOffsetSigma );
+    gL3G.xThreshold = 3*gL3G.calib.xOffsetSigma;
+    gL3G.yThreshold = 3*gL3G.calib.yOffsetSigma;
+    gL3G.zThreshold = 3*gL3G.calib.zOffsetSigma;
+
+    UARTprintf("L3G4200D Gyroscope Calibration Data\r\n");
+    UARTprintf(" xOffset = %d xOffsetSigma = %d\r\n",  gL3G.calib.xOffset, gL3G.calib.xOffsetSigma);
+    UARTprintf(" yOffset = %d yOffsetSigma = %d\r\n",  gL3G.calib.yOffset, gL3G.calib.yOffsetSigma);
+    UARTprintf(" zOffset = %d zOffsetSigma = %d\r\n\r\n",  gL3G.calib.zOffset, gL3G.calib.zOffsetSigma);
+
+    util_MemCpy(gNvdBuf+sizeof(gADXL345.calib)+sizeof(gHMC5883L.calib), (u08*)&(gL3G.calib.xOffset), sizeof(gL3G.calib));
+    nvd_UpdateFlash();
+    }
+
+
+
+void mcu_Config(void)	{
+	tmrsys_Config();
+	InitConsole();
+	i2c_Config();
+    LED_INIT();
+    }
+
+
+
