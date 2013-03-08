@@ -1,0 +1,1 @@
+"./util/uartstdio.obj" "./util.obj" "./tmrsys.obj" "./stdio_console.obj" "./startup_ccs.obj" "./main.obj" "./l3g4200d.obj" "./imu.obj" "./i2c_IMU.obj" "./hmc5883l.obj" "./bmp085.obj" "./adxl345.obj" -l"libc.a" -l"C:/Users/Terence/workspace_v5_3/Stellaris IMU/../../../../StellarisWare/driverlib/ccs-cm4f/Debug/driverlib-cm4f.lib" "../lm4f120h5qr.cmd" 
