@@ -30,7 +30,7 @@
 #include "stdio_console.h"
 #include "utils/uartstdio.h"
 #include "driverlib/systick.h"
-
+#include "driverlib/eeprom.h"
 
 //*****************************************************************************
 //
@@ -77,6 +77,15 @@ long gnPA;
 volatile int xcounter = 0;
 volatile int ycounter = 0;
 
+typedef struct {
+	ADXL345_CALIB_DATA adxl345_calib;
+	HMC5883L_CALIB_DATA hmc5883L_calib;
+	L3G_CALIB_DATA l3g4200d_calib;
+} EE_STORE;
+
+
+EE_STORE gNvdBuf;
+
 void util_FillAveragingBuffers(void);
 void ui_SetDefaultUserParams(void);
 void ui_ADXL345Calibrate(void);
@@ -88,6 +97,10 @@ void ui_HMC5883LCalibrate(void);
 void ui_L3GCalibrate(void);
 void ui_printframe(void);
 int util_WaitBtnPressTimeout(int seconds);
+void ui_ReadUserParams(void);
+int ui_Check_Params(void);
+void ui_ReadUserParams(void);
+int ui_WriteUserParams(void);
 
 uint8_t ftoa(float f, uint8_t numchar, char *buf);
 
@@ -116,8 +129,12 @@ int main(void) {
 	InitConsole();				//Init BT UART Console
 	i2c_Config();				// Setup i2c -- i2c_port 1
 
-	LED_INIT()
-	;					// Setup launchpad LEDs
+	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
+	EEPROMInit();
+
+//	EEPROMMassErase();
+
+	LED_INIT();					// Setup launchpad LEDs
 
 	UARTprintf("\n\nGY-80 Initialising.\n");
 	UARTprintf("Checking Sensors on i2c bus.\n\n");
@@ -159,6 +176,16 @@ int main(void) {
 	/*
 	 * Print screen frame
 	 */
+
+	if (ui_Check_Params()) {
+		ui_ReadUserParams();
+		LED(RED,off);
+	} else {
+		ui_SetDefaultUserParams();
+		UARTprintf("corrupted Calibration data in EEPROM!");
+		LED(RED,on);
+	}
+
 	ui_printframe();
 	/*
 	 * IMU routines
@@ -174,7 +201,6 @@ int main(void) {
 	int lx, ly, lz;
 	int smpCnt = 0;
 
-	ui_SetDefaultUserParams();		//Load default calibrations
 	imu_Init();						//Setup all sensors Acc, Gryo, Mag, Alt
 
 	util_FillAveragingBuffers();	//Fill Averaging Buffer with Data
@@ -249,16 +275,16 @@ int main(void) {
 
 			imu_UpdateData(gAXC, gAYC, gAZC, gGXC, gGYC, gGZC, gMXC, gMYC,
 					gMZC);
-			imu_GetYawPitchRoll(gYPR);
+			imu_GetEuler(gYPR);
 
 			/*
 			 *
 			 */
 
-			ftoa(gYPR[0], 5, (char *) stringfloat1);
-			ftoa(gYPR[1], 5, (char *) stringfloat2);
-			ftoa(gYPR[2], 5, (char *) stringfloat3);
-			UARTprintf("|   %s    |    %s   |     %s    |             |",
+			ftoa(gYPR[0], 4, (char *) stringfloat1);
+			ftoa(gYPR[1], 4, (char *) stringfloat2);
+			ftoa(gYPR[2], 4, (char *) stringfloat3);
+			UARTprintf("|   %s    |    %s     |     %s     |             |  ",
 					stringfloat1, stringfloat2, stringfloat3);
 			smpCnt++;
 
@@ -271,27 +297,31 @@ int main(void) {
 				UARTprintf("%c[H", ASCII_ESC);
 
 				UARTprintf(
-						"To calibrate accelerometer, press button within 5 seconds!\r\n");
-				if (util_WaitBtnPressTimeout(5)) {
+						"To calibrate accelerometer, press button within 3 seconds!\r\n");
+				if (util_WaitBtnPressTimeout(3)) {
 					ui_ADXL345Calibrate();
 				}
 
 				UARTprintf(
-						"To calibrate compass, press button within 5 seconds!\r\n");
-				if (util_WaitBtnPressTimeout(5)) {
+						"To calibrate compass, press button within 3 seconds!\r\n");
+				if (util_WaitBtnPressTimeout(3)) {
 					ui_HMC5883LCalibrate();
 				}
 
 				UARTprintf(
-						"To calibrate gyroscope, press button within 5 seconds!\r\n");
-				if (util_WaitBtnPressTimeout(5)) {
+						"To calibrate gyroscope, press button within 3 seconds!\r\n");
+				if (util_WaitBtnPressTimeout(3)) {
 					ui_L3GCalibrate();
 				}
 				SysTickIntDisable();
-				DELAY_MS(3000);
+
+				ui_WriteUserParams();
+				DELAY_MS(1000);
+
 				UARTprintf("%c[2J", ASCII_ESC);
 				ui_printframe();
 				gbBtnPressed = 0;
+
 				SysTickIntEnable();
 
 			}
@@ -600,4 +630,61 @@ int util_WaitBtnPressTimeout(int seconds) {
 	} else {
 		return 0;
 	}
+}
+
+int ui_Check_Params(void) {
+	unsigned long EE_CRC, CURRENT_CRC;
+	EE_CRC = (sizeof(gNvdBuf)/2);
+	EEPROMRead((unsigned long*) &(gNvdBuf.adxl345_calib.x0g), EEPROMAddrFromBlock(1), sizeof(gNvdBuf));
+	EEPROMRead(&EE_CRC, EEPROMAddrFromBlock(1) + sizeof(gNvdBuf), sizeof(EE_CRC));
+	CURRENT_CRC = ROM_Crc16Array ((sizeof(gNvdBuf)/4), (unsigned long*) &(gNvdBuf.adxl345_calib.x0g));
+	if (CURRENT_CRC != EE_CRC)
+		return 0;
+	return 1;
+}
+
+void ui_ReadUserParams(void) {
+	util_MemCpy((u08*) &(gADXL345.calib.x0g), (u08*) &(gNvdBuf.adxl345_calib),
+			sizeof(gADXL345.calib));
+
+	util_MemCpy((u08*) &(gHMC5883L.calib.xMax),
+			(u08*) &(gNvdBuf.hmc5883L_calib), sizeof(gHMC5883L.calib));
+
+	gHMC5883L.xRange = gHMC5883L.calib.xMax - gHMC5883L.calib.xMin;
+	gHMC5883L.yRange = gHMC5883L.calib.yMax - gHMC5883L.calib.yMin;
+	gHMC5883L.zRange = gHMC5883L.calib.zMax - gHMC5883L.calib.zMin;
+
+	util_MemCpy((u08*) &(gL3G.calib.xOffset), (u08*) &(gNvdBuf.l3g4200d_calib),
+			sizeof(gL3G.calib));
+
+	gL3G.xThreshold = 3 * gL3G.calib.xOffsetSigma;
+	gL3G.yThreshold = 3 * gL3G.calib.yOffsetSigma;
+	gL3G.zThreshold = 3 * gL3G.calib.zOffsetSigma;
+}
+
+int ui_WriteUserParams(void) {
+	unsigned long CURRENT_CRC;
+	util_MemCpy((u08*) &(gNvdBuf), (u08*) &(gADXL345.calib.x0g),
+			sizeof(gADXL345.calib));
+	util_MemCpy((u08*) &gNvdBuf + sizeof(gADXL345.calib),
+			(u08*) &(gHMC5883L.calib.xMax), sizeof(gHMC5883L.calib));
+	util_MemCpy(
+			(u08*) &gNvdBuf + sizeof(gADXL345.calib) + sizeof(gHMC5883L.calib),
+			(u08*) &(gL3G.calib.xOffset), sizeof(gL3G.calib));
+
+	EEPROMProgram((unsigned long*) &(gNvdBuf.adxl345_calib.x0g),  EEPROMAddrFromBlock(1),
+			(unsigned long) sizeof(gNvdBuf));
+	CURRENT_CRC = ROM_Crc16Array ((sizeof(gNvdBuf)/4), (unsigned long*) &(gNvdBuf));
+	EEPROMProgram(&CURRENT_CRC,  EEPROMAddrFromBlock(1) + sizeof(gNvdBuf), 4);
+
+	if (ui_Check_Params()) {
+		UARTprintf("\nCalibration Parameters saved");
+		LED(RED,off);
+		return 1;
+	};
+
+	UARTprintf("\nWrite fail, Calibration not saved!\n");
+	LED(RED,1);
+	return 0;
+
 }

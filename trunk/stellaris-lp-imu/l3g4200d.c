@@ -57,8 +57,8 @@ void l3g_GetAveragedRawData(int numSamples, int* pXavg, int* pYavg, int* pZavg) 
 	*pZavg = util_AverageSamples(gZBuf, numSamples);
 }
 
-void l3g_GetCalibStatsRawData(int numSamples, int* pXavg, int* pYavg,
-		int* pZavg, int* pXSigma, int* pYSigma, int* pZSigma) {
+void l3g_GetCalibStatsRawData(int numSamples, short* pXavg, short* pYavg,
+		short* pZavg, short* pXSigma, short* pYSigma, short* pZSigma) {
 	int cnt;
 	for (cnt = 0; cnt < numSamples; cnt++) {
 		l3g_ReadXYZRawData(&gXBuf[cnt], &gYBuf[cnt], &gZBuf[cnt]);

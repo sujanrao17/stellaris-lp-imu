@@ -22,6 +22,11 @@
 #include "i2c.h"
 #include <math.h>
 #include "tmrsys.h"
+#include "adxl345.h"
+#include "hmc5883l.h"
+#include "l3g4200d.h"
+
+
 
 void util_BtnClear(void) {
     gbBtnPressed = 0;

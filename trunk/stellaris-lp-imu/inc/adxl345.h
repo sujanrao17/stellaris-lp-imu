@@ -103,14 +103,14 @@
 #define ADXL345_SAMPLE_DELAY_MS    70
 
 typedef struct ADXL345_CALIB_DATA_ {
-    int x0g;
-    int y0g;
-    int xp1g;
-    int xm1g;
-    int yp1g;
-    int ym1g;
-    int zp1g;
-    int zm1g;
+    short x0g;
+    short y0g;
+    short xp1g;
+    short xm1g;
+    short yp1g;
+    short ym1g;
+    short zp1g;
+    short zm1g;
 } ADXL345_CALIB_DATA;
 
 

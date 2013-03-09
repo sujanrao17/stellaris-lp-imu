@@ -54,12 +54,12 @@
 #define MAX_MAG_SAMPLES 10
 
 typedef struct HMC5883L_CALIB_DATA_ {
-    int xMax;
-    int xMin;
-    int yMax;
-    int yMin;
-    int zMax;
-    int zMin;
+	short xMax;
+	short xMin;
+	short yMax;
+	short yMin;
+	short zMax;
+	short zMin;
 } HMC5883L_CALIB_DATA;
 
 typedef struct HMC_DATA_ {
