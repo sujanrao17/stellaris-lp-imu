@@ -56,12 +56,12 @@
 #define L3G_SENSITIVITY_2000DPS  (0.07000f)
 
 typedef struct L3G_CALIB_DATA_ {
-    int xOffset;
-    int yOffset;
-    int zOffset;
-    int xOffsetSigma;
-    int yOffsetSigma;
-    int zOffsetSigma;
+	short xOffset;
+	short yOffset;
+	short zOffset;
+	short xOffsetSigma;
+	short yOffsetSigma;
+	short zOffsetSigma;
 } L3G_CALIB_DATA;
 
 typedef struct L3G_DATA_ {
@@ -76,7 +76,7 @@ extern L3G_DATA gL3G;
 void l3g_Config(void);
 void l3g_ReadXYZRawData(int *pxraw, int* pyraw, int* pzraw);
 void l3g_GetAveragedRawData(int numSamples, int* pXavg, int* pYavg, int* pZavg);
-void l3g_GetCalibStatsRawData(int numSamples, int* pXavg, int* pYavg, int* pZavg, int* pXSigma, int* pYSigma, int* pZSigma);
+void l3g_GetCalibStatsRawData(int numSamples, short* pXavg, short* pYavg, short* pZavg, short* pXSigma, short* pYSigma, short* pZSigma);
 void l3g_GetCorrectedData(int xraw, int yraw, int zraw, float* pgcx, float* pgcy, float* pgcz);
 
 #endif
