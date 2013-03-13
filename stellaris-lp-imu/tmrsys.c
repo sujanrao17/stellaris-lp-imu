@@ -23,9 +23,9 @@
 #include "driverlib/interrupt.h"
 #include "driverlib/systick.h"
 
-volatile u32 gnSysTick = 0; // counts ticks since power up or reset
+//volatile u32 gnSysTick = 0; // counts ticks since power up or reset
 
-volatile long long sys_us = 0;   //global micros() clock. ime since tmrsys_ResetElapsedTime() was called
+volatile unsigned long long sys_us = 0;   //global micros() clock. ime since tmrsys_ResetElapsedTime() was called
 
 volatile u32 gBtnState = 0;
 volatile int gbBtnPressed = 0;
@@ -72,13 +72,13 @@ void tmrsys_Config(void) {
 	ROM_GPIOPadConfigSet (BUTTONS_GPIO_BASE, ALL_BUTTONS, GPIO_STRENGTH_2MA,
 			GPIO_PIN_TYPE_STD_WPU);
 
-	unsigned long clk = (ROM_SysCtlClockGet () / 100000) - 1; //System clock / desired freq in Hz 1kHz = 1ms. 1Mhz = 1us. minus 1 for interupt cycle.
+	unsigned long clk = (ROM_SysCtlClockGet () / 1000000) - 1; //System clock / desired freq in Hz 1kHz = 1ms. 1Mhz = 1us. minus 1 for interupt cycle.
 	SysTickPeriodSet(clk); // 1us per interupt.
 	SysTickEnable();
 	SysTickIntEnable();
 	IntMasterEnable();
 
-	ms_counter = 100000; //10ms count down, AHRS update rate.
+	ms_counter = 10000; //10ms count down, AHRS update rate.
 	sys_us = 0;
 }
 
@@ -91,7 +91,7 @@ void SysTick_Handler(void) {
 	sys_us++; // update clock since booted in uS.
 
 	if (!ms_counter) {
-		ms_counter = 100000;
+		ms_counter = 10000;
 		gbSysTickFlag = 1;
 		gBtnState = (gBtnState << 1) | (u32) BTN_PRESSED
 		;

@@ -74,8 +74,8 @@ typedef struct L3G_DATA_ {
 extern L3G_DATA gL3G;
 
 void l3g_Config(void);
-void l3g_ReadXYZRawData(int *pxraw, int* pyraw, int* pzraw);
-void l3g_GetAveragedRawData(int numSamples, int* pXavg, int* pYavg, int* pZavg);
+void l3g_ReadXYZRawData(short *pxraw, short* pyraw, short* pzraw);
+void l3g_GetAveragedRawData(char numSamples, short* pXavg, short* pYavg, short* pZavg);
 void l3g_GetCalibStatsRawData(int numSamples, short* pXavg, short* pYavg, short* pZavg, short* pXSigma, short* pYSigma, short* pZSigma);
 void l3g_GetCorrectedData(int xraw, int yraw, int zraw, float* pgcx, float* pgcy, float* pgcz);
 

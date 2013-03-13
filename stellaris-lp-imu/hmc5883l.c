@@ -26,9 +26,9 @@
 
 
 HMC_DATA gHMC5883L;
-extern int gXBuf[];
-extern int gYBuf[];
-extern int gZBuf[];
+short MXBuf[];
+short MYBuf[];
+short MZBuf[];
 
 int gGaussScale[8] = {
     1370,   //  0.9
@@ -68,7 +68,7 @@ void hmc5883l_SetGain(int gain) {
     i2c_XmtByte(I2C_ID_HMC5883L, HMC5883L_CONFIG_B,b);
     }
 
-void hmc5883l_ReadXYZRawData(int* pmx, int* pmy, int* pmz) {
+void hmc5883l_ReadXYZRawData(short* pmx, short* pmy, short* pmz) {
     u08 buf[6];
     s16 x,y,z;
     i2c_RcvBuf(I2C_ID_HMC5883L, HMC5883L_DATA,6,buf);
@@ -84,12 +84,12 @@ void hmc5883l_ReadXYZRawData(int* pmx, int* pmy, int* pmz) {
 void hmc5883l_GetAveragedRawData(int numSamples, int* pXavg, int* pYavg, int* pZavg)  {
     int cnt;
     for (cnt = 0; cnt < numSamples; cnt++){
-        hmc5883l_ReadXYZRawData(&gXBuf[cnt], &gYBuf[cnt], &gZBuf[cnt]);
+        hmc5883l_ReadXYZRawData(&MXBuf[cnt], &MYBuf[cnt], &MZBuf[cnt]);
         DELAY_MS(HMC5883L_MEAS_DELAY_MS);
         }
-    *pXavg = util_AverageSamples(gXBuf,numSamples);
-    *pYavg = util_AverageSamples(gYBuf,numSamples);
-    *pZavg = util_AverageSamples(gZBuf,numSamples);
+    *pXavg = util_AverageSamples(MXBuf,numSamples);
+    *pYavg = util_AverageSamples(MYBuf,numSamples);
+    *pZavg = util_AverageSamples(MZBuf,numSamples);
     }
 
 void hmc5883l_GetCorrectedData(int mx, int my, int mz, float *pcmx, float* pcmy, float* pcmz) {

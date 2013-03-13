@@ -129,9 +129,9 @@ extern ADXL345_DATA gADXL345;
 
 void adxl345_Config(void);
 void adxl345_PowerOn(void);
-void adxl345_ReadXYZRawData(int *pxraw, int* pyraw, int* pzraw);
+void adxl345_ReadXYZRawData(short *pxraw, short* pyraw, short* pzraw);
 void adxl345_GetCorrectedData(int ax, int ay, int az, float* pacx, float * pacy, float* pacz);
-void adxl345_GetAveragedRawData(int numSamples, int* pXavg, int* pYavg, int* pZavg);
+void adxl345_GetAveragedRawData(char numSamples, short* pXavg, short* pYavg, short* pZavg);
 void adxl345_CalcXYZGData(int xraw, int yraw, int zraw, int* pgx, int * pgy, int* pgz);
 void adxl345_SetTapThreshold(int tapThreshold);
 int adxl345_GetTapThreshold(void);

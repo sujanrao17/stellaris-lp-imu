@@ -51,7 +51,7 @@ void util_MemCpy(u08* pDestination, u08* pSource, int nBytes) {
 	}
     }
 
-int util_AverageSamples(int buf[], int numSamples) {
+int util_AverageSamples(short buf[], char numSamples) {
     int cnt, average;
     cnt = numSamples;
     average = 0;
@@ -63,7 +63,7 @@ int util_AverageSamples(int buf[], int numSamples) {
     return average;
     }
 
-int util_SigmaSamples(int buf[], int numSamples, int average) {
+int util_SigmaSamples(short buf[], char numSamples, int average) {
     int cnt, variance,tmp;
     double sigma;
     cnt = numSamples;
