@@ -65,19 +65,14 @@
 
 extern char gszBuf[80];
 
-//#define Nop()  					{asm("NOP");}
 
 #define ABS(x)                 ((x) < 0 ? -(x) : (x))
 #define CLAMP(x,min,max)       {if ((x) <= (min)) (x) = (min); else if ((x) >= (max)) (x) = (max);}
-#define CORE(x,t)              {if (ABS(x) <= (t)) (x) = 0;}
-#define CORRECT(x,mx,mn)  		(((double)(x-mn)/(double)(mx-mn)) - 0.5)
 
 void util_MemSet(uint8_t* pBuffer, uint8_t val, int32_t nBytes);
 void util_MemCpy(uint8_t* pDestination, uint8_t* pSource, int32_t nBytes);
-int32_t util_AverageSamples(int32_t buf[], int32_t numSamples);
-int32_t util_SigmaSamples(int32_t buf[], int32_t numSamples, int32_t average);
-void util_SerialPrint32_tFloatAsHex(float f);
-void util_SerialPrint32_tQuaternion(float q[]);
+int util_AverageSamples(short buf[], char numSamples);
+int util_SigmaSamples(short buf[], char numSamples, int average);
 int32_t util_WaitBtnPressTimeout(int32_t seconds);
 
 #endif // GLOBAL_H_

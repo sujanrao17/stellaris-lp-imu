@@ -53,7 +53,6 @@ extern unsigned long __STACK_TOP;
 //
 //*****************************************************************************
 extern void SysTick_Handler(void);
-extern void UARTStdioIntHandler(void);
 
 
 //*****************************************************************************

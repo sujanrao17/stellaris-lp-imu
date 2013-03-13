@@ -20,7 +20,6 @@
 
 #include "common.h"
 #include "tmrsys.h"
-#include "fpu.h"
 #include "i2c_IMU.h"
 #include "imu.h"
 #include "adxl345.h"
@@ -42,35 +41,16 @@ void __error__(char *pcFilename, unsigned long ulLine) {
 }
 #endif
 
-#define MAX_CALIB_SAMPLES   100
-
-int gXBuf[MAX_CALIB_SAMPLES];
-int gYBuf[MAX_CALIB_SAMPLES];
-int gZBuf[MAX_CALIB_SAMPLES];
-
-int gAXRawAvg, gAYRawAvg, gAZRawAvg;
-int gGXRawAvg, gGYRawAvg, gGZRawAvg;
-int gMXRawAvg, gMYRawAvg, gMZRawAvg;
 float gAXC, gAYC, gAZC;
 float gGXC, gGYC, gGZC;
 float gMXC, gMYC, gMZC;
 
-#define MAX_AVG_SAMPLES 4
-#define NUM_AVG_SAMPLES 2
-
-int gAXBuf[MAX_AVG_SAMPLES];
-int gAYBuf[MAX_AVG_SAMPLES];
-int gAZBuf[MAX_AVG_SAMPLES];
-int gMXBuf[MAX_AVG_SAMPLES];
-int gMYBuf[MAX_AVG_SAMPLES];
-int gMZBuf[MAX_AVG_SAMPLES];
-int gGXBuf[MAX_AVG_SAMPLES];
-int gGYBuf[MAX_AVG_SAMPLES];
-int gGZBuf[MAX_AVG_SAMPLES];
+short gAXRaw, gAYRaw, gAZRaw;
+short gMXRaw, gMYRaw, gMZRaw;
+short gGXRaw, gGYRaw, gGZRaw;
 
 float gQuaternion[4];
 float gYPR[3];
-float gYPRref[3];
 
 long gnPA;
 
@@ -124,7 +104,7 @@ int main(void) {
 	 * System configs.
 	 */
 	FPUEnable();				// FPU disabled by default.
-	tmrsys_Config();//Start SYSTIK timer and buttons, using systik for denounce.
+	tmrsys_Config();			//Start SYSTIK timer and buttons, using systik for denounce.
 	InitConsole();				//Init BT UART Console
 	i2c_Config();				// Setup i2c -- i2c_port 1
 
@@ -140,7 +120,7 @@ int main(void) {
 
 	// Ping i2c device to make sure they are alive.
 
-#ifdef DEBUG
+#if DEBUG
 
 	UARTprintf("L34200D (3-Axis gyroscope) : ");
 	if (i2c_RcvByte(I2C_ID_L3G4200D, L3G_WHO_AM_I) == 0xD3) {
@@ -187,7 +167,7 @@ int main(void) {
 		LED(RED, on);
 	}
 
-#ifdef DEBUG
+#if DEBUG
 	/*
 	 * Print screen frame
 	 */
@@ -203,9 +183,7 @@ int main(void) {
 	char stringfloat2[10];
 	char stringfloat3[10];
 
-//	int smpCnt = 0;
 	imu_Init();						//Setup all sensors Acc, Gryo, Mag, Alt
-//	util_FillAveragingBuffers();	//Fill Averaging Buffer with Data
 
 	while (1) {
 		if (gbSysTickFlag) {								//trigger every 10ms
@@ -215,54 +193,26 @@ int main(void) {
 			 * Sensor fusion stuff
 			 */
 
-			/*				adxl345_ReadXYZRawData(&gAXBuf[smpCnt], &gAYBuf[smpCnt],
-			 &gAZBuf[smpCnt]);
-			 l3g_ReadXYZRawData(&gGXBuf[smpCnt], &gGYBuf[smpCnt],
-			 &gGZBuf[smpCnt]);
-			 hmc5883l_ReadXYZRawData(&gMXBuf[smpCnt], &gMYBuf[smpCnt],
-			 &gMZBuf[smpCnt]);
+			adxl345_ReadXYZRawData(&gAXRaw, &gAYRaw, &gAZRaw);					// get Raw Acc Data
+			l3g_ReadXYZRawData(&gGXRaw, &gGYRaw, &gGZRaw);						// get Raw Gyro Data
+			hmc5883l_ReadXYZRawData(&gMXRaw, &gMYRaw, &gMZRaw);					// get Raw Magn Data
 
-			 gAXRawAvg = util_AverageSamples(gAXBuf, NUM_AVG_SAMPLES);
-			 gAYRawAvg = util_AverageSamples(gAYBuf, NUM_AVG_SAMPLES);
-			 gAZRawAvg = util_AverageSamples(gAZBuf, NUM_AVG_SAMPLES);
 
-			 gGXRawAvg = util_AverageSamples(gGXBuf, NUM_AVG_SAMPLES);
-			 gGYRawAvg = util_AverageSamples(gGYBuf, NUM_AVG_SAMPLES);
-			 gGZRawAvg = util_AverageSamples(gGZBuf, NUM_AVG_SAMPLES);
+			adxl345_GetCorrectedData(gAXRaw, gAYRaw, gAZRaw, &gAXC, &gAYC, &gAZC);    	//update with calibration Data
+			l3g_GetCorrectedData(gGXRaw, gGYRaw, gGZRaw, &gGXC, &gGYC, &gGZC);			//update with calibration Data
+			hmc5883l_GetCorrectedData(gMXRaw, gMYRaw, gMZRaw, &gMXC, &gMYC, &gMZC);		//update with calibration Data
 
-			 gMXRawAvg = util_AverageSamples(gMXBuf, NUM_AVG_SAMPLES);
-			 gMYRawAvg = util_AverageSamples(gMYBuf, NUM_AVG_SAMPLES);
-			 gMZRawAvg = util_AverageSamples(gMZBuf, NUM_AVG_SAMPLES);
+			imu_UpdateData(gAXC, gAYC, gAZC, gGXC, gGYC, gGZC, gMXC, gMYC, gMZC);		//update realdata.
 
-			 adxl345_GetCorrectedData(gAXRawAvg, gAYRawAvg, gAZRawAvg, &gAXC,
-			 &gAYC, &gAZC);
-			 l3g_GetCorrectedData(gGXRawAvg, gGYRawAvg, gGZRawAvg, &gGXC, &gGYC,
-			 &gGZC);
-			 hmc5883l_GetCorrectedData(gMXRawAvg, gMYRawAvg, gMZRawAvg, &gMXC,
-			 &gMYC, &gMZC);
+	//		imu_UpdateData(0, gAYC, 0, 0, gGYC, 0, 0, gMYC, 0);		//update realdata.
 
-			 imu_UpdateData(gAXC, gAYC, gAZC, gGXC, gGYC, gGZC, gMXC, gMYC,
-			 gMZC);*/
-
-			adxl345_ReadXYZRawData(&gAXBuf[0], &gAYBuf[0], &gAZBuf[0]);
-			l3g_ReadXYZRawData(&gGXBuf[0], &gGYBuf[0], &gGZBuf[0]);
-			hmc5883l_ReadXYZRawData(&gMXBuf[0], &gMYBuf[0], &gMZBuf[0]);
-			adxl345_GetCorrectedData(gAXBuf[0], gAYBuf[0], gAZBuf[0], &gAXC,
-					&gAYC, &gAZC);
-
-			l3g_GetCorrectedData(gGXBuf[0], gGYBuf[0], gGZBuf[0], &gGXC, &gGYC,
-					&gGZC);
-			hmc5883l_GetCorrectedData(gMXBuf[0], gMYBuf[0], gMZBuf[0], &gMXC,
-					&gMYC, &gMZC);
-			imu_UpdateData(gAXC, gAYC, gAZC, gGXC, gGYC, gGZC, gMXC, gMYC,
-					gMZC);
-
+//			imu_GetEuler(gYPR);
 			imu_GetYawPitchRoll(gYPR);
 
-#ifdef DEBUG
+#if DEBUG
 
 	        float IMU_Heading;
-	        int lx, ly, lz;
+	        short lx, ly, lz;
 	        char stringfloat4[10];
 
             bmp085_AcquireAveragedSample(4);                                //Average 4 sample.
@@ -298,25 +248,21 @@ int main(void) {
             UARTprintf("%c[20;0H", ASCII_ESC);
 
 			ftoa(gYPR[0], 4, (char *) stringfloat1);
-            ftoa(gYPR[1], 5, (char *) stringfloat2);
-            ftoa(gYPR[2], 5, (char *) stringfloat3);
+            ftoa(gYPR[1], 4, (char *) stringfloat2);
+            ftoa(gYPR[2], 4, (char *) stringfloat3);
             UARTprintf("|   %s    |    %s   |     %s    |             |",
                             stringfloat1, stringfloat2, stringfloat3);
 #else
-
 			ftoa(gYPR[0], 4, (char *) stringfloat1);
 			ftoa(gYPR[1], 4, (char *) stringfloat2);
 			ftoa(gYPR[2], 4, (char *) stringfloat3);
-			UARTprintf("%s,%s,%s!", stringfloat3, stringfloat2, stringfloat1);//send out roll, pitch, yaw!
+//			ftoa(0, 4, (char *) stringfloat1);
+//			ftoa(0, 4, (char *) stringfloat3);
+
+			UARTprintf("%s,%s,%s!", stringfloat3, stringfloat2, stringfloat1);		//send out roll, pitch, yaw!
 #endif
 
 
-/*			smpCnt++;
-
-			if (smpCnt == NUM_AVG_SAMPLES)
-				smpCnt = 0;
-
-*/
 			if (gbBtnPressed) {
 
 				UARTprintf("%c[2J", ASCII_ESC);
@@ -357,28 +303,6 @@ int main(void) {
 
 }
 
-void util_FillAveragingBuffers(void) {
-	int x, y, z, cnt;
-
-	adxl345_GetAveragedRawData(4, &x, &y, &z);
-	for (cnt = 0; cnt < NUM_AVG_SAMPLES; cnt++) {
-		gAXBuf[cnt] = x;
-		gAYBuf[cnt] = y;
-		gAZBuf[cnt] = z;
-	}
-	l3g_GetAveragedRawData(4, &x, &y, &z);
-	for (cnt = 0; cnt < NUM_AVG_SAMPLES; cnt++) {
-		gGXBuf[cnt] = x;
-		gGYBuf[cnt] = y;
-		gGZBuf[cnt] = z;
-	}
-	hmc5883l_GetAveragedRawData(4, &x, &y, &z);
-	for (cnt = 0; cnt < NUM_AVG_SAMPLES; cnt++) {
-		gMXBuf[cnt] = x;
-		gMYBuf[cnt] = y;
-		gMZBuf[cnt] = z;
-	}
-}
 
 void ui_SetDefaultUserParams(void) {
 
@@ -489,10 +413,10 @@ uint8_t ftoa(float f, uint8_t decPlaces, char *buf) {
 
 void ui_ADXL345Calibrate(void) {
 
-	int x, y, z;
+	short x, y, z;
 	UARTprintf("Orient board Z axis UP and hit C\r\n");
 	while (!gbBtnPressed)
-		;;
+		;
 	gbBtnPressed = 0;
 	adxl345_GetAveragedRawData(10, &x, &y, &z);
 	gADXL345.calib.x0g = x;
@@ -564,19 +488,20 @@ void ui_HMC5883LCalibrate(void) {
 	gHMC5883L.calib.xMin = gHMC5883L.calib.yMin = gHMC5883L.calib.zMin = 32767;
 
 	while (!gbBtnPressed) {
-		hmc5883l_ReadXYZRawData(&gMXRawAvg, &gMYRawAvg, &gMZRawAvg);
-		if (gMXRawAvg > gHMC5883L.calib.xMax)
-			gHMC5883L.calib.xMax = gMXRawAvg;
-		if (gMYRawAvg > gHMC5883L.calib.yMax)
-			gHMC5883L.calib.yMax = gMYRawAvg;
-		if (gMZRawAvg > gHMC5883L.calib.zMax)
-			gHMC5883L.calib.zMax = gMZRawAvg;
-		if (gMXRawAvg < gHMC5883L.calib.xMin)
-			gHMC5883L.calib.xMin = gMXRawAvg;
-		if (gMYRawAvg < gHMC5883L.calib.yMin)
-			gHMC5883L.calib.yMin = gMYRawAvg;
-		if (gMZRawAvg < gHMC5883L.calib.zMin)
-			gHMC5883L.calib.zMin = gMZRawAvg;
+		hmc5883l_ReadXYZRawData(&gMXRaw, &gMYRaw, &gMZRaw);
+
+		if (gMXRaw > gHMC5883L.calib.xMax)
+			gHMC5883L.calib.xMax = gMXRaw;
+		if (gMYRaw > gHMC5883L.calib.yMax)
+			gHMC5883L.calib.yMax = gMYRaw;
+		if (gMZRaw > gHMC5883L.calib.zMax)
+			gHMC5883L.calib.zMax = gMZRaw;
+		if (gMXRaw < gHMC5883L.calib.xMin)
+			gHMC5883L.calib.xMin = gMXRaw;
+		if (gMYRaw < gHMC5883L.calib.yMin)
+			gHMC5883L.calib.yMin = gMYRaw;
+		if (gMZRaw < gHMC5883L.calib.zMin)
+			gHMC5883L.calib.zMin = gMZRaw;
 		DELAY_MS(HMC5883L_MEAS_DELAY_MS);
 	}
 	gbBtnPressed = 0;
@@ -602,9 +527,11 @@ void ui_L3GCalibrate(void) {
 		;
 	gbBtnPressed = 0;
 	DELAY_MS(2000);
+
 	l3g_GetCalibStatsRawData(100, &gL3G.calib.xOffset, &gL3G.calib.yOffset,
 			&gL3G.calib.zOffset, &gL3G.calib.xOffsetSigma,
 			&gL3G.calib.yOffsetSigma, &gL3G.calib.zOffsetSigma);
+
 	gL3G.xThreshold = 3 * gL3G.calib.xOffsetSigma;
 	gL3G.yThreshold = 3 * gL3G.calib.yOffsetSigma;
 	gL3G.zThreshold = 3 * gL3G.calib.zOffsetSigma;
@@ -646,10 +573,10 @@ void ui_printframe(void) {
 
 int util_WaitBtnPressTimeout(int seconds) {
 	u32 tick, delayTicks;
-	delayTicks = (seconds * 1000) / TMRSYS_TICK_MS;
-	tick = gnSysTick;
+	delayTicks = (seconds * 1000000);   // ticks in uS.
+	tick = sys_us;
 	gbBtnPressed = 0;
-	while ((!gbBtnPressed) && ((gnSysTick - tick) < delayTicks))
+	while ((!gbBtnPressed) && ((sys_us - tick) < delayTicks))
 		;;
 	if (gbBtnPressed) {
 		gbBtnPressed = 0;

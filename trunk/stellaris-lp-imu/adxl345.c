@@ -24,9 +24,11 @@
 #include <math.h>
 
 ADXL345_DATA gADXL345;
-extern int gXBuf[];
-extern int gYBuf[];
-extern int gZBuf[];
+
+short AXAvgBuf[];
+short AYAvgBuf[];
+short AZAvgBuf[];
+
 
 void adxl345_Config(void) {
 	adxl345_PowerOn();
@@ -51,17 +53,17 @@ void adxl345_PowerOn(void) {
 }
 
 // Reads the raw data into three variable x, y and z
-void adxl345_ReadXYZRawData(int *pxraw, int* pyraw, int* pzraw) {
+void adxl345_ReadXYZRawData(short *pxraw, short* pyraw, short* pzraw) {
 	u08 buf[6];
-	s16 x, y, z;
+	short x, y, z;
 	i2c_RcvBuf(I2C_ID_ADXL345, ADXL345_DATAX0, 6, buf); //read the acceleration data from the ADXL345
 	// each axis reading comes in 13 bit 2's complement format. lsb first, msb has sign bits extended
 	x = (s16) ((((u16) buf[1]) << 8) | (u16) buf[0]);
-	*pxraw = (int) x;
+	*pxraw =  x;
 	y = (s16) ((((u16) buf[3]) << 8) | (u16) buf[2]);
-	*pyraw = (int) y;
+	*pyraw =  y;
 	z = (s16) ((((u16) buf[5]) << 8) | (u16) buf[4]);
-	*pzraw = (int) z;
+	*pzraw =  z;
 }
 
 void adxl345_CalcXYZGData(int xraw, int yraw, int zraw, int* pgx, int * pgy,
@@ -78,16 +80,17 @@ void adxl345_GetCorrectedData(int ax, int ay, int az, float* pacx, float * pacy,
 	*pacz = (float) (az - gADXL345.z0g) / (float) gADXL345.zSens;
 }
 
-void adxl345_GetAveragedRawData(int numSamples, int* pXavg, int* pYavg,
-		int* pZavg) {
+void adxl345_GetAveragedRawData(char numSamples, short* pXavg, short* pYavg,
+		short* pZavg) {
 	int cnt;
+
 	for (cnt = 0; cnt < numSamples; cnt++) {
-		adxl345_ReadXYZRawData(&gXBuf[cnt], &gYBuf[cnt], &gZBuf[cnt]);
+		adxl345_ReadXYZRawData(&AXAvgBuf[cnt], &AYAvgBuf[cnt], &AZAvgBuf[cnt]);
 		DELAY_MS(ADXL345_SAMPLE_DELAY_MS)
 	}
-	*pXavg = util_AverageSamples(gXBuf, numSamples);
-	*pYavg = util_AverageSamples(gYBuf, numSamples);
-	*pZavg = util_AverageSamples(gZBuf, numSamples);
+	*pXavg = util_AverageSamples(AXAvgBuf, numSamples);
+	*pYavg = util_AverageSamples(AYAvgBuf, numSamples);
+	*pZavg = util_AverageSamples(AZAvgBuf, numSamples);
 }
 
 // Gets the range setting and return it into rangeSetting

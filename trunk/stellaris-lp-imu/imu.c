@@ -34,11 +34,9 @@ volatile float twoKp;      // 2 * proportional gain (Kp)
 volatile float twoKi;      // 2 * integral gain (Ki)
 volatile float q0, q1, q2, q3; // quaternion of sensor frame relative to auxiliary frame
 volatile float integralFBx, integralFBy, integralFBz;
-unsigned long lastUpdate, now; // sample period expressed in milliseconds
+unsigned long long lastUpdate, now; // sample period expressed in microseconds
 float sampleFreq; // half the sample period expressed in seconds
 int startLoopTime;
-
-int gRawData[11]; // concatenate accelerometer, gyroscope, magnetometer, temperature and pressure data
 
 float gRealData[11]; //
 
@@ -67,27 +65,17 @@ void imu_Init(void) {
 	now = 0;
 }
 
-void imu_GetRawValues(int axraw, int ayraw, int azraw, int gxraw, int gyraw,
-		int gzraw, int mxraw, int myraw, int mzraw) {
-	gRawData[0] = axraw;
-	gRawData[1] = ayraw;
-	gRawData[2] = azraw;
-	gRawData[3] = gxraw;
-	gRawData[4] = gyraw;
-	gRawData[5] = gzraw;
-	gRawData[6] = mxraw;
-	gRawData[7] = myraw;
-	gRawData[8] = mzraw;
-}
 
 void imu_UpdateData(float ax, float ay, float az, float gx, float gy, float gz,
 		float mx, float my, float mz) {
 	gRealData[0] = ax;
 	gRealData[1] = ay;
 	gRealData[2] = az;
+
 	gRealData[3] = gx;
 	gRealData[4] = gy;
 	gRealData[5] = gz;
+
 	gRealData[6] = mx;
 	gRealData[7] = my;
 	gRealData[8] = mz;
@@ -195,9 +183,11 @@ void imu_AHRSUpdate(float gx, float gy, float gz, float ax, float ay, float az,
 	gx *= (0.5f * (1.0f / sampleFreq));   // pre-multiply common factors
 	gy *= (0.5f * (1.0f / sampleFreq));
 	gz *= (0.5f * (1.0f / sampleFreq));
+
 	qa = q0;
 	qb = q1;
 	qc = q2;
+
 	q0 += (-qb * gx - qc * gy - q3 * gz);
 	q1 += (qa * gx + qc * gz - q3 * gy);
 	q2 += (qa * gy - qb * gz + q3 * gx);
@@ -216,7 +206,9 @@ unsigned long us_ticks;
 void imu_GetQ(float * q) {
 
 	now = sys_us; //1 us per tick
+
 	sampleFreq = 1.0f / ((float)(now - lastUpdate) / 1000000.0);
+
 	lastUpdate = now+1;
 
 	// gyro values are expressed in deg/sec, convert to radians/sec
@@ -233,19 +225,22 @@ void imu_GetQ(float * q) {
 // Returns the Euler angles in radians defined with the Aerospace sequence.
 // See Sebastian O.H. Madwick report
 // "An efficient orientation filter for inertial and intertial/magnetic sensor arrays" Chapter 2 Quaternion representation
-void imu_GetEuler(float * angles) {
+void imu_GetEuler(float * ypr) {
 	float q[4]; // quaternion
+
 	imu_GetQ(q);
 
-	angles[0] = atan2(2 * q[1] * q[2] - 2 * q[0] * q[3],
-			2 * q[0] * q[0] + 2 * q[1] * q[1] - 1) * 180 / M_PI; // psi
-	angles[1] = -asin(2 * q[1] * q[3] + 2 * q[0] * q[2]) * 180 / M_PI; // theta
-	angles[2] = atan2(2 * q[2] * q[3] - 2 * q[0] * q[1],
-			2 * q[0] * q[0] + 2 * q[3] * q[3] - 1) * 180 / M_PI; // phi
+
+	ypr[0] = atan2(2.0 * q[1] * q[2] - 2.0 * q[0] * q[3], 2.0 * q[0] * q[0] + 2.0 * q[1] * q[1] - 1) * (float)(180 / M_PI); // psi
+
+	ypr[1] = -asin(2.0 * q[1] * q[3] + 2.0 * q[0] * q[2]) * (float)(180 / M_PI); // theta  //Pitch
+
+	ypr[2] = atan2(2.0 * q[2] * q[3] - 2.0 * q[0] * q[1], 2.0 * q[0] * q[0] + 2.0 * q[3] * q[3] - 1) * (float)(180 / M_PI); // phi
 }
 
 void imu_GetYawPitchRoll(float * ypr) {
 	float q[4]; // quaternion
+
 	float gx, gy, gz; // estimated gravity direction
 	imu_GetQ(q);
 
@@ -254,21 +249,11 @@ void imu_GetYawPitchRoll(float * ypr) {
 	gz = q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3];
 
 	ypr[0] = atan2(2 * q[1] * q[2] - 2 * q[0] * q[3],
-			2 * q[0] * q[0] + 2 * q[1] * q[1] - 1) * 180 / M_PI;
-	ypr[1] = atan(gx / sqrt(gy * gy + gz * gz)) * 180 / M_PI;
-	ypr[2] = atan(gy / sqrt(gx * gx + gz * gz)) * 180 / M_PI;
+			2 * q[0] * q[0] + 2 * q[1] * q[1] - 1) * 180 / M_PI;		//yaw
+	ypr[1] = atan(gx / sqrt(gy * gy + gz * gz)) * 180 / M_PI;			//pitch
+	ypr[2] = atan(gy / sqrt(gx * gx + gz * gz)) * 180 / M_PI;			//roll
 }
 
 float imu_InvSqrt(float number) {
-	volatile long i;
-	volatile float x, y;
-	volatile const float f = 1.5F;
-
-	x = number * 0.5F;
-	y = number;
-	i = *((long *) &y);
-	i = 0x5f375a86 - (i >> 1);
-	y = *((float *) &i);
-	y = y * (f - (x * y * y));
-	return y;
+	return (float)(1.0f / sqrt(number));
 }

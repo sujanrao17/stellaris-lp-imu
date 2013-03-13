@@ -22,8 +22,6 @@
 #ifndef TMRSYS_H_
 #define TMRSYS_H_
 
-#define TMRSYS_TICK_MS  10
-
 void tmrsys_Config(void);
 void tmrsys_ResetElapsedTime(void);
 
@@ -32,6 +30,6 @@ extern volatile int gbBtnPressed;
 extern volatile int gbSysTickFlag;
 extern volatile u32 gBtnState;
 extern volatile u32 gnTick;
-extern volatile long long sys_us;
+extern volatile unsigned long long sys_us;
 
 #endif // TMRSYS_H_
