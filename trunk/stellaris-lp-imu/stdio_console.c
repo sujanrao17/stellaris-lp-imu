@@ -46,7 +46,12 @@
 void
 InitConsole(void)
 {
-	//
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    ROM_GPIOPinConfigure(GPIO_PA0_U0RX);
+    ROM_GPIOPinConfigure(GPIO_PA1_U0TX);
+    ROM_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    UARTStdioInit(0);
+/*	//
 	// Enable GPIO port A which is used for UART0 pins.
 	// TODO: change this to whichever GPIO port you are using.
 	//
@@ -79,7 +84,7 @@ InitConsole(void)
 	ROM_SysCtlDelay(2000000);
 	UARTprintf( "%c[2J", ASCII_ESC );
 	UARTprintf( "%c[H", ASCII_ESC );
-    UARTprintf( "%c[?25h", ASCII_ESC );
+    UARTprintf( "%c[?25h", ASCII_ESC );*/
 }
 
 

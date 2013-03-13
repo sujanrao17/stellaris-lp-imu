@@ -67,7 +67,7 @@ typedef struct HMC_DATA_ {
     int xRange;
     int yRange;
     int zRange;
-    int scaleIndex;
+    int gainIndex;
     int headingDeg;
     } HMC_DATA;
 
@@ -75,7 +75,7 @@ extern HMC_DATA gHMC5883L;
 
 
 void hmc5883l_Config(void);
-void hmc5883l_SetScale(int scale);
+void hmc5883l_SetGain(int gain);
 void hmc5883l_ReadXYZRawData(int* pmx, int* pmy, int* pmz);
 void hmc5883l_GetGaussReadings(float* pmx, float* pmy, float * pmz);
 void hmc5883l_SetMeasurementMode(int mode);

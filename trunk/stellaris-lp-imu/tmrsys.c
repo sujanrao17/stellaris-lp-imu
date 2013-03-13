@@ -24,17 +24,14 @@
 #include "driverlib/systick.h"
 
 volatile u32 gnSysTick = 0; // counts ticks since power up or reset
-volatile u32 gnHours = 0; // elapsed time counter
-volatile u32 gnMinutes = 0;
-volatile u32 gnSeconds = 0;
+
+volatile long long sys_us = 0;   //global micros() clock. ime since tmrsys_ResetElapsedTime() was called
 
 volatile u32 gBtnState = 0;
 volatile int gbBtnPressed = 0;
 volatile int gbSysTickFlag = 0;
-volatile u32 gnTick = 0; //  time since tmrsys_ResetElapsedTime() was called
+volatile int ms_counter = 10000;
 
-#define BTN_PIN			3
-#define BTN_PRESSED    	GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_0);
 
 #define BUTTONS_GPIO_PERIPH     SYSCTL_PERIPH_GPIOF
 #define BUTTONS_GPIO_BASE       GPIO_PORTF_BASE
@@ -44,6 +41,8 @@ volatile u32 gnTick = 0; //  time since tmrsys_ResetElapsedTime() was called
 #define RIGHT_BUTTON            GPIO_PIN_0
 
 #define ALL_BUTTONS             (LEFT_BUTTON | RIGHT_BUTTON)
+
+#define BTN_PRESSED    			GPIOPinRead(GPIO_PORTF_BASE, RIGHT_BUTTON);
 
 ///
 /// System timer is used to generate system tick,
@@ -73,13 +72,14 @@ void tmrsys_Config(void) {
 	ROM_GPIOPadConfigSet (BUTTONS_GPIO_BASE, ALL_BUTTONS, GPIO_STRENGTH_2MA,
 			GPIO_PIN_TYPE_STD_WPU);
 
-	long clk = (ROM_SysCtlClockGet () / 100) - 1;
-	SysTickPeriodSet((ROM_SysCtlClockGet () / 100) - 1); // 10mS tick
+	unsigned long clk = (ROM_SysCtlClockGet () / 100000) - 1; //System clock / desired freq in Hz 1kHz = 1ms. 1Mhz = 1us. minus 1 for interupt cycle.
+	SysTickPeriodSet(clk); // 1us per interupt.
 	SysTickEnable();
 	SysTickIntEnable();
 	IntMasterEnable();
 
-	gnTick = 0;
+	ms_counter = 100000; //10ms count down, AHRS update rate.
+	sys_us = 0;
 }
 
 ///
@@ -87,45 +87,27 @@ void tmrsys_Config(void) {
 /// Increment the system tick, debounce the button,
 /// increment the elapsed seconds, minutes and hours if needed
 void SysTick_Handler(void) {
-	gbSysTickFlag = 1;
-	gBtnState = (gBtnState << 1) | (u32) BTN_PRESSED
-	;
-	if ((gBtnState & 63UL) == 32) {
-		gbBtnPressed = 1;
+
+	sys_us++; // update clock since booted in uS.
+
+	if (!ms_counter) {
+		ms_counter = 100000;
+		gbSysTickFlag = 1;
+		gBtnState = (gBtnState << 1) | (u32) BTN_PRESSED
+		;
+		if ((gBtnState & 63UL) == 32) {
+			gbBtnPressed = 1;
+		}
+
+	} else {
+		ms_counter--;
 	}
 
-	gnSysTick++;
-	gnTick++;
-	if (gnTick == 100) {
-		gnTick = 0;
-		gnSeconds++;
-		if (gnSeconds == 60) {
-			gnSeconds = 0;
-			gnMinutes++;
-			if (gnMinutes == 60) {
-				gnMinutes = 0;
-				gnHours++;
-			}
-		}
-	}
 }
 
 ///
 /// Reset the elapsed seconds, minutes and hours to zero
 void tmrsys_ResetElapsedTime(void) {
-	gnTick = 0;
-	gnSeconds = 0;
-	gnMinutes = 0;
-	gnHours = 0;
+	sys_us = 0;
 }
 
-/// Busy wait for specified time in milliseconds
-/// @param delayMs number of milliseconds to wait
-///         resolution cannot be less than TMRSYS_TICK_MS
-void tmrsys_DelayMs(u32 delayMs) {
-	u32 curTick, delayTicks;
-	delayTicks = delayMs / TMRSYS_TICK_MS;
-	curTick = gnSysTick;
-	while ((gnSysTick - curTick) < delayTicks)
-		;
-}

@@ -55,8 +55,8 @@ float gAXC, gAYC, gAZC;
 float gGXC, gGYC, gGZC;
 float gMXC, gMYC, gMZC;
 
-#define MAX_AVG_SAMPLES 8
-#define NUM_AVG_SAMPLES 4
+#define MAX_AVG_SAMPLES 4
+#define NUM_AVG_SAMPLES 2
 
 int gAXBuf[MAX_AVG_SAMPLES];
 int gAYBuf[MAX_AVG_SAMPLES];
@@ -82,7 +82,6 @@ typedef struct {
 	HMC5883L_CALIB_DATA hmc5883L_calib;
 	L3G_CALIB_DATA l3g4200d_calib;
 } EE_STORE;
-
 
 EE_STORE gNvdBuf;
 
@@ -129,7 +128,7 @@ int main(void) {
 	InitConsole();				//Init BT UART Console
 	i2c_Config();				// Setup i2c -- i2c_port 1
 
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
+	ROM_SysCtlPeripheralEnable (SYSCTL_PERIPH_EEPROM0);
 	EEPROMInit();
 
 //	EEPROMMassErase();
@@ -139,9 +138,10 @@ int main(void) {
 	UARTprintf("\n\nGY-80 Initialising.\n");
 	UARTprintf("Checking Sensors on i2c bus.\n\n");
 
-	/*
-	 * Ping i2c device to make sure they are alive.
-	 */
+	// Ping i2c device to make sure they are alive.
+
+#ifdef DEBUG
+
 	UARTprintf("L34200D (3-Axis gyroscope) : ");
 	if (i2c_RcvByte(I2C_ID_L3G4200D, L3G_WHO_AM_I) == 0xD3) {
 		UARTprintf("ok\n");
@@ -173,124 +173,150 @@ int main(void) {
 	UARTprintf("%c[?25l", ASCII_ESC);
 
 	DELAY_MS(1000);
-	/*
-	 * Print screen frame
-	 */
+
+
+#endif
+
 
 	if (ui_Check_Params()) {
 		ui_ReadUserParams();
-		LED(RED,off);
+		LED(RED, off);
 	} else {
 		ui_SetDefaultUserParams();
-		UARTprintf("corrupted Calibration data in EEPROM!");
-		LED(RED,on);
+		UARTprintf("corrupted Calibration data in EEPROM!\n");
+		LED(RED, on);
 	}
 
+#ifdef DEBUG
+	/*
+	 * Print screen frame
+	 */
 	ui_printframe();
+
+#endif
+
 	/*
 	 * IMU routines
 	 */
 
-	float IMU_Heading;
-
 	char stringfloat1[10];
 	char stringfloat2[10];
 	char stringfloat3[10];
-	char stringfloat4[10];
 
-	int lx, ly, lz;
-	int smpCnt = 0;
-
+//	int smpCnt = 0;
 	imu_Init();						//Setup all sensors Acc, Gryo, Mag, Alt
-
-	util_FillAveragingBuffers();	//Fill Averaging Buffer with Data
+//	util_FillAveragingBuffers();	//Fill Averaging Buffer with Data
 
 	while (1) {
 		if (gbSysTickFlag) {								//trigger every 10ms
 			gbSysTickFlag = 0;
 
-//			LED_TOGGLE(RED);
-
-			bmp085_AcquireAveragedSample(4);				//Average 4 sample.
-			bmp085_AverageAltitude();
-
-			UARTprintf("%c[4;0H", ASCII_ESC);
-
-			ftoa((float) (gnAltCm / 100.0), 4, (char*) stringfloat1);
-			UARTprintf("|    %2d*C     |   %sm    |  %08dpa  |             |",
-					gnTempC, stringfloat1, gnPa);
-
-			hmc5883l_ReadXYZRawData(&lx, &ly, &lz);
-			IMU_Heading = hmc5883l_GetHeadingDeg(lx, ly, 0.0457);
-
-			UARTprintf("%c[8;0H", ASCII_ESC);
-			ftoa(IMU_Heading, 4, (char*) stringfloat4);
-			UARTprintf("|   %05d     |    %05d    |    %05d     |   %s*   |",
-					lx, ly, lz, stringfloat4);
-
-			UARTprintf("%c[12;0H", ASCII_ESC);
-			adxl345_ReadXYZRawData(&lx, &ly, &lz);
-			UARTprintf(
-					"|   %05d     |    %05d    |    %05d     |             |",
-					lx, ly, lz);
-
-			UARTprintf("%c[16;0H", ASCII_ESC);
-
-			l3g_ReadXYZRawData(&lx, &ly, &lz);
-			UARTprintf(
-					"|   %05d     |    %05d    |    %05d     |             |",
-					lx, ly, lz);
-
-			UARTprintf("%c[20;0H", ASCII_ESC);
-
 			/*
 			 * Sensor fusion stuff
 			 */
 
-			adxl345_ReadXYZRawData(&gAXBuf[smpCnt], &gAYBuf[smpCnt],
-					&gAZBuf[smpCnt]);
-			l3g_ReadXYZRawData(&gGXBuf[smpCnt], &gGYBuf[smpCnt],
-					&gGZBuf[smpCnt]);
-			hmc5883l_ReadXYZRawData(&gMXBuf[smpCnt], &gMYBuf[smpCnt],
-					&gMZBuf[smpCnt]);
+			/*				adxl345_ReadXYZRawData(&gAXBuf[smpCnt], &gAYBuf[smpCnt],
+			 &gAZBuf[smpCnt]);
+			 l3g_ReadXYZRawData(&gGXBuf[smpCnt], &gGYBuf[smpCnt],
+			 &gGZBuf[smpCnt]);
+			 hmc5883l_ReadXYZRawData(&gMXBuf[smpCnt], &gMYBuf[smpCnt],
+			 &gMZBuf[smpCnt]);
 
-			gAXRawAvg = util_AverageSamples(gAXBuf, NUM_AVG_SAMPLES);
-			gAYRawAvg = util_AverageSamples(gAYBuf, NUM_AVG_SAMPLES);
-			gAZRawAvg = util_AverageSamples(gAZBuf, NUM_AVG_SAMPLES);
+			 gAXRawAvg = util_AverageSamples(gAXBuf, NUM_AVG_SAMPLES);
+			 gAYRawAvg = util_AverageSamples(gAYBuf, NUM_AVG_SAMPLES);
+			 gAZRawAvg = util_AverageSamples(gAZBuf, NUM_AVG_SAMPLES);
 
-			gGXRawAvg = util_AverageSamples(gGXBuf, NUM_AVG_SAMPLES);
-			gGYRawAvg = util_AverageSamples(gGYBuf, NUM_AVG_SAMPLES);
-			gGZRawAvg = util_AverageSamples(gGZBuf, NUM_AVG_SAMPLES);
+			 gGXRawAvg = util_AverageSamples(gGXBuf, NUM_AVG_SAMPLES);
+			 gGYRawAvg = util_AverageSamples(gGYBuf, NUM_AVG_SAMPLES);
+			 gGZRawAvg = util_AverageSamples(gGZBuf, NUM_AVG_SAMPLES);
 
-			gMXRawAvg = util_AverageSamples(gMXBuf, NUM_AVG_SAMPLES);
-			gMYRawAvg = util_AverageSamples(gMYBuf, NUM_AVG_SAMPLES);
-			gMZRawAvg = util_AverageSamples(gMZBuf, NUM_AVG_SAMPLES);
+			 gMXRawAvg = util_AverageSamples(gMXBuf, NUM_AVG_SAMPLES);
+			 gMYRawAvg = util_AverageSamples(gMYBuf, NUM_AVG_SAMPLES);
+			 gMZRawAvg = util_AverageSamples(gMZBuf, NUM_AVG_SAMPLES);
 
-			adxl345_GetCorrectedData(gAXRawAvg, gAYRawAvg, gAZRawAvg, &gAXC,
+			 adxl345_GetCorrectedData(gAXRawAvg, gAYRawAvg, gAZRawAvg, &gAXC,
+			 &gAYC, &gAZC);
+			 l3g_GetCorrectedData(gGXRawAvg, gGYRawAvg, gGZRawAvg, &gGXC, &gGYC,
+			 &gGZC);
+			 hmc5883l_GetCorrectedData(gMXRawAvg, gMYRawAvg, gMZRawAvg, &gMXC,
+			 &gMYC, &gMZC);
+
+			 imu_UpdateData(gAXC, gAYC, gAZC, gGXC, gGYC, gGZC, gMXC, gMYC,
+			 gMZC);*/
+
+			adxl345_ReadXYZRawData(&gAXBuf[0], &gAYBuf[0], &gAZBuf[0]);
+			l3g_ReadXYZRawData(&gGXBuf[0], &gGYBuf[0], &gGZBuf[0]);
+			hmc5883l_ReadXYZRawData(&gMXBuf[0], &gMYBuf[0], &gMZBuf[0]);
+			adxl345_GetCorrectedData(gAXBuf[0], gAYBuf[0], gAZBuf[0], &gAXC,
 					&gAYC, &gAZC);
-			l3g_GetCorrectedData(gGXRawAvg, gGYRawAvg, gGZRawAvg, &gGXC, &gGYC,
-					&gGZC);
-			hmc5883l_GetCorrectedData(gMXRawAvg, gMYRawAvg, gMZRawAvg, &gMXC,
-					&gMYC, &gMZC);
 
+			l3g_GetCorrectedData(gGXBuf[0], gGYBuf[0], gGZBuf[0], &gGXC, &gGYC,
+					&gGZC);
+			hmc5883l_GetCorrectedData(gMXBuf[0], gMYBuf[0], gMZBuf[0], &gMXC,
+					&gMYC, &gMZC);
 			imu_UpdateData(gAXC, gAYC, gAZC, gGXC, gGYC, gGZC, gMXC, gMYC,
 					gMZC);
-			imu_GetEuler(gYPR);
 
-			/*
-			 *
-			 */
+			imu_GetYawPitchRoll(gYPR);
+
+#ifdef DEBUG
+
+	        float IMU_Heading;
+	        int lx, ly, lz;
+	        char stringfloat4[10];
+
+            bmp085_AcquireAveragedSample(4);                                //Average 4 sample.
+            bmp085_AverageAltitude();
+
+            UARTprintf("%c[4;0H", ASCII_ESC);
+
+            ftoa((float) (gnAltCm / 100.0), 4, (char*) stringfloat1);
+            UARTprintf("|    %2d*C     |   %sm    |  %08dpa  |             |",
+                            gnTempC, stringfloat1, gnPa);
+
+            hmc5883l_ReadXYZRawData(&lx, &ly, &lz);
+            IMU_Heading = hmc5883l_GetHeadingDeg(lx, ly, 0.0457);
+
+            UARTprintf("%c[8;0H", ASCII_ESC);
+            ftoa(IMU_Heading, 4, (char*) stringfloat4);
+            UARTprintf("|   %05d     |    %05d    |    %05d     |   %s*   |",
+                            lx, ly, lz, stringfloat4);
+
+            UARTprintf("%c[12;0H", ASCII_ESC);
+            adxl345_ReadXYZRawData(&lx, &ly, &lz);
+            UARTprintf(
+                            "|   %05d     |    %05d    |    %05d     |             |",
+                            lx, ly, lz);
+
+            UARTprintf("%c[16;0H", ASCII_ESC);
+
+            l3g_ReadXYZRawData(&lx, &ly, &lz);
+            UARTprintf(
+                            "|   %05d     |    %05d    |    %05d     |             |",
+                            lx, ly, lz);
+
+            UARTprintf("%c[20;0H", ASCII_ESC);
+
+			ftoa(gYPR[0], 4, (char *) stringfloat1);
+            ftoa(gYPR[1], 5, (char *) stringfloat2);
+            ftoa(gYPR[2], 5, (char *) stringfloat3);
+            UARTprintf("|   %s    |    %s   |     %s    |             |",
+                            stringfloat1, stringfloat2, stringfloat3);
+#else
 
 			ftoa(gYPR[0], 4, (char *) stringfloat1);
 			ftoa(gYPR[1], 4, (char *) stringfloat2);
 			ftoa(gYPR[2], 4, (char *) stringfloat3);
-			UARTprintf("|   %s    |    %s     |     %s     |             |  ",
-					stringfloat1, stringfloat2, stringfloat3);
-			smpCnt++;
+			UARTprintf("%s,%s,%s!", stringfloat3, stringfloat2, stringfloat1);//send out roll, pitch, yaw!
+#endif
+
+
+/*			smpCnt++;
 
 			if (smpCnt == NUM_AVG_SAMPLES)
 				smpCnt = 0;
 
+*/
 			if (gbBtnPressed) {
 
 				UARTprintf("%c[2J", ASCII_ESC);
@@ -325,8 +351,6 @@ int main(void) {
 				SysTickIntEnable();
 
 			}
-//			LED(BLUE, off);
-//			LED(GREEN, off);
 
 		}
 	}
@@ -410,6 +434,7 @@ void ui_SetDefaultUserParams(void) {
 uint8_t ftoa(float f, uint8_t decPlaces, char *buf) {
 
 	int pos = 0, ix, dp, num, total;
+
 	if (f < 0) {
 		buf[pos++] = '-';
 		f = -f;
@@ -418,6 +443,8 @@ uint8_t ftoa(float f, uint8_t decPlaces, char *buf) {
 	while (f >= 10.0) {
 		f = f / 10.0;
 		dp++;
+		if (dp > 10)
+			f = 0;
 	}
 
 	total = dp + decPlaces;
@@ -634,10 +661,13 @@ int util_WaitBtnPressTimeout(int seconds) {
 
 int ui_Check_Params(void) {
 	unsigned long EE_CRC, CURRENT_CRC;
-	EE_CRC = (sizeof(gNvdBuf)/2);
-	EEPROMRead((unsigned long*) &(gNvdBuf.adxl345_calib.x0g), EEPROMAddrFromBlock(1), sizeof(gNvdBuf));
-	EEPROMRead(&EE_CRC, EEPROMAddrFromBlock(1) + sizeof(gNvdBuf), sizeof(EE_CRC));
-	CURRENT_CRC = ROM_Crc16Array ((sizeof(gNvdBuf)/4), (unsigned long*) &(gNvdBuf.adxl345_calib.x0g));
+	EE_CRC = (sizeof(gNvdBuf) / 2);
+	EEPROMRead((unsigned long*) &(gNvdBuf.adxl345_calib.x0g),
+			EEPROMAddrFromBlock(1), sizeof(gNvdBuf));
+	EEPROMRead(&EE_CRC, EEPROMAddrFromBlock(1) + sizeof(gNvdBuf),
+			sizeof(EE_CRC));
+	CURRENT_CRC = ROM_Crc16Array ((sizeof(gNvdBuf) / 4),
+			(unsigned long*) &(gNvdBuf.adxl345_calib.x0g));
 	if (CURRENT_CRC != EE_CRC)
 		return 0;
 	return 1;
@@ -660,6 +690,15 @@ void ui_ReadUserParams(void) {
 	gL3G.xThreshold = 3 * gL3G.calib.xOffsetSigma;
 	gL3G.yThreshold = 3 * gL3G.calib.yOffsetSigma;
 	gL3G.zThreshold = 3 * gL3G.calib.zOffsetSigma;
+
+	gADXL345.xSens = (gADXL345.calib.xp1g - gADXL345.calib.xm1g) / 2;
+	gADXL345.ySens = (gADXL345.calib.yp1g - gADXL345.calib.ym1g) / 2;
+	gADXL345.zSens = (gADXL345.calib.zp1g - gADXL345.calib.zm1g) / 2;
+
+	gADXL345.z0g = gADXL345.calib.zp1g - gADXL345.zSens;
+	gADXL345.x2g = 10000L / (s32) gADXL345.xSens;
+	gADXL345.y2g = 10000L / (s32) gADXL345.ySens;
+	gADXL345.z2g = 10000L / (s32) gADXL345.zSens;
 }
 
 int ui_WriteUserParams(void) {
@@ -672,19 +711,20 @@ int ui_WriteUserParams(void) {
 			(u08*) &gNvdBuf + sizeof(gADXL345.calib) + sizeof(gHMC5883L.calib),
 			(u08*) &(gL3G.calib.xOffset), sizeof(gL3G.calib));
 
-	EEPROMProgram((unsigned long*) &(gNvdBuf.adxl345_calib.x0g),  EEPROMAddrFromBlock(1),
-			(unsigned long) sizeof(gNvdBuf));
-	CURRENT_CRC = ROM_Crc16Array ((sizeof(gNvdBuf)/4), (unsigned long*) &(gNvdBuf));
-	EEPROMProgram(&CURRENT_CRC,  EEPROMAddrFromBlock(1) + sizeof(gNvdBuf), 4);
+	EEPROMProgram((unsigned long*) &(gNvdBuf.adxl345_calib.x0g),
+			EEPROMAddrFromBlock(1), (unsigned long) sizeof(gNvdBuf));
+	CURRENT_CRC = ROM_Crc16Array ((sizeof(gNvdBuf) / 4),
+			(unsigned long*) &(gNvdBuf));
+	EEPROMProgram(&CURRENT_CRC, EEPROMAddrFromBlock(1) + sizeof(gNvdBuf), 4);
 
 	if (ui_Check_Params()) {
 		UARTprintf("\nCalibration Parameters saved");
-		LED(RED,off);
+		LED(RED, off);
 		return 1;
 	};
 
 	UARTprintf("\nWrite fail, Calibration not saved!\n");
-	LED(RED,1);
+	LED(RED, 1);
 	return 0;
 
 }

@@ -29,14 +29,6 @@ extern int gYBuf[];
 extern int gZBuf[];
 
 void adxl345_Config(void) {
-	gADXL345.xSens = (gADXL345.calib.xp1g - gADXL345.calib.xm1g) / 2;
-	gADXL345.ySens = (gADXL345.calib.yp1g - gADXL345.calib.ym1g) / 2;
-	gADXL345.zSens = (gADXL345.calib.zp1g - gADXL345.calib.zm1g) / 2;
-	gADXL345.z0g = gADXL345.calib.zp1g - gADXL345.zSens;
-	gADXL345.x2g = 10000L / (s32) gADXL345.xSens;
-	gADXL345.y2g = 10000L / (s32) gADXL345.ySens;
-	gADXL345.z2g = 10000L / (s32) gADXL345.zSens;
-
 	adxl345_PowerOn();
 	adxl345_BypassFifo();
 	i2c_XmtByte(I2C_ID_ADXL345, ADXL345_DATA_FORMAT, 0);
@@ -53,8 +45,8 @@ void adxl345_BypassFifo(void) {
 }
 
 void adxl345_PowerOn(void) {
-	i2c_XmtByte(I2C_ID_ADXL345, ADXL345_POWER_CTL, 0);
-	i2c_XmtByte(I2C_ID_ADXL345, ADXL345_POWER_CTL, 16);
+	//i2c_XmtByte(I2C_ID_ADXL345, ADXL345_POWER_CTL, 0);
+	//i2c_XmtByte(I2C_ID_ADXL345, ADXL345_POWER_CTL, 16);
 	i2c_XmtByte(I2C_ID_ADXL345, ADXL345_POWER_CTL, 8);
 }
 
@@ -78,12 +70,6 @@ void adxl345_CalcXYZGData(int xraw, int yraw, int zraw, int* pgx, int * pgy,
 	*pgy = (((yraw - gADXL345.calib.y0g) * gADXL345.x2g * 98L) / 1000L);
 	*pgz = (((zraw - gADXL345.z0g) * gADXL345.z2g * 98L) / 1000L);
 }
-
-//void adxl345_GetCorrectedData(int ax, int ay, int az, float* pacx, float * pacy, float* pacz) {
-//    *pacx = ax;
-//    *pacy = ay;
-//    *pacz = az;
-//    }
 
 void adxl345_GetCorrectedData(int ax, int ay, int az, float* pacx, float * pacy,
 		float* pacz) {

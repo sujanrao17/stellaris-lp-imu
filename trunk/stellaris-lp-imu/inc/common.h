@@ -23,7 +23,6 @@
 #define GLOBAL_H_
 
 #define DEBUG 0
-
 #define BLINK 0
 
 #include "inc/hw_gpio.h"
