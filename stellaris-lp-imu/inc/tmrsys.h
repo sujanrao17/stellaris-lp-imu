@@ -24,18 +24,14 @@
 
 #define TMRSYS_TICK_MS  10
 
-
 void tmrsys_Config(void);
 void tmrsys_ResetElapsedTime(void);
-void tmrsys_DelayMs(u32 delayMs);
 
 extern volatile u32 gnSysTick;
-extern volatile u32 gnHours;
-extern volatile u32 gnMinutes;
-extern volatile u32 gnSeconds;
 extern volatile int gbBtnPressed;
 extern volatile int gbSysTickFlag;
 extern volatile u32 gBtnState;
 extern volatile u32 gnTick;
+extern volatile long long sys_us;
 
 #endif // TMRSYS_H_

@@ -50,6 +50,7 @@ void imu_Init(void) {
 	l3g_Config();
 	bmp085_Config();
 
+	  // initialize quaternion
 	q0 = 1.0f;
 	q1 = 0.0f;
 	q2 = 0.0f;
@@ -210,15 +211,13 @@ void imu_AHRSUpdate(float gx, float gy, float gz, float ax, float ay, float az,
 	q3 *= recipNorm;
 }
 
-//#define DEBUG_PRINT(x)   uart_Printf("%f\r\n",x)
-#define DEBUG_PRINT(x)
+unsigned long us_ticks;
 
 void imu_GetQ(float * q) {
-	DEBUG_PRINT(DEG2RAD(gRealData[3])); DEBUG_PRINT(DEG2RAD(gRealData[4])); DEBUG_PRINT(DEG2RAD(gRealData[5])); DEBUG_PRINT(gRealData[0]); DEBUG_PRINT(gRealData[1]); DEBUG_PRINT(gRealData[2]); DEBUG_PRINT(gRealData[6]); DEBUG_PRINT(gRealData[7]); DEBUG_PRINT(gRealData[8]);
 
-	now = gnSysTick; //10ms per tick
-	sampleFreq = 100.0f / (float) (now - lastUpdate);
-	lastUpdate = now;
+	now = sys_us; //1 us per tick
+	sampleFreq = 1.0f / ((float)(now - lastUpdate) / 1000000.0);
+	lastUpdate = now+1;
 
 	// gyro values are expressed in deg/sec, convert to radians/sec
 	imu_AHRSUpdate(DEG2RAD(gRealData[3]), DEG2RAD(gRealData[4]),

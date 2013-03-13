@@ -43,17 +43,28 @@ int gGaussScale[8] = {
 
 
 void hmc5883l_Config(void) {
+
+/*
+	  magn.init(false); // Don't set mode yet, we'll do that later on.
+	  // Calibrate HMC using self test, not recommended to change the gain after calibration.
+	  magn.calibrate(1); // Use gain 1=default, valid 0-7, 7 not recommended.
+	  // Single mode conversion was used in calibration, now set continuous mode
+	  hmc5883l_SetOperatingMode(HMC5883L_MEAS_CONTINUOUS);
+	  DELAY_MS(10);
+	  magn.setDOR(B110);
+*/
+
     u08 b;
-    hmc5883l_SetScale(HMC5883L_SCALE_13);
+    hmc5883l_SetGain(HMC5883L_SCALE_13);
     b = 0x78; // "01111000" clear CRA7, 8 sample average, 75Hz data rate, normal measurement flow
     i2c_XmtByte(I2C_ID_HMC5883L, HMC5883L_CONFIG_A,b);
     hmc5883l_SetOperatingMode(HMC5883L_MEAS_CONTINUOUS);
     }
 
-void hmc5883l_SetScale(int scale) {
+void hmc5883l_SetGain(int gain) {
     u08 b;
-    gHMC5883L.scaleIndex = scale;
-    b = (((u08)scale)<<5);
+    gHMC5883L.gainIndex = gain;
+    b = (((uint8_t)gain)<<5);
     i2c_XmtByte(I2C_ID_HMC5883L, HMC5883L_CONFIG_B,b);
     }
 
@@ -80,12 +91,6 @@ void hmc5883l_GetAveragedRawData(int numSamples, int* pXavg, int* pYavg, int* pZ
     *pYavg = util_AverageSamples(gYBuf,numSamples);
     *pZavg = util_AverageSamples(gZBuf,numSamples);
     }
-
-//void hmc5883l_GetCorrectedData(int mx, int my, int mz, float *pcmx, float* pcmy, float* pcmz) {
-//    *pcmx = mx;
-//    *pcmy = my;
-//    *pcmz = mz;
-//    }
 
 void hmc5883l_GetCorrectedData(int mx, int my, int mz, float *pcmx, float* pcmy, float* pcmz) {
     *pcmx = ((float)(mx - gHMC5883L.calib.xMin)/(float)gHMC5883L.xRange) - 0.5f;
@@ -128,5 +133,48 @@ void hmc5883l_SetOperatingMode(int mode) {
     b = (u08)mode;
     i2c_XmtByte(I2C_ID_HMC5883L, HMC5883L_MODE,b);
     }
+/*
 
 
+
+    Calibrate which has a few weaknesses.
+    1. Uses wrong gain for first reading.
+    2. Uses max instead of max of average when normalizing the axis to one another.
+    3. Doesn't use neg bias. (possible improvement in measurement).
+
+void HMC58X3_calibrate(uint8_t gain) {
+  x_scale=1; // get actual values
+  y_scale=1;
+  z_scale=1;
+  i2c_XmtByte(I2C_ID_HMC5883L, HMC5883L_CONFIG_A, 0x010 + HMC_POS_BIAS); // Reg A DOR=0x010 + MS1,MS0 set to pos bias
+  hmc5883l_SetGain(gain);
+  float x, y, z, mx=0, my=0, mz=0, t=10;
+
+  for (int i=0; i<(int)t; i++) {
+	hmc5883l_SetOperatingMode(int mode);
+    getValues(&x,&y,&z);
+    if (x>mx) mx=x;
+    if (y>my) my=y;
+    if (z>mz) mz=z;
+  }
+
+  float max=0;
+  if (mx>max) max=mx;
+  if (my>max) max=my;
+  if (mz>max) max=mz;
+  x_max=mx;
+  y_max=my;
+  z_max=mz;
+  x_scale=max/mx; // calc scales
+  y_scale=max/my;
+  z_scale=max/mz;
+
+  i2c_XmtByte(I2C_ID_HMC5883L, HMC5883L_CONFIG_A, 0x010); // set RegA/DOR back to default
+}   // calibrate().
+
+*/
+
+void hmc5883l_getID(uint8_t id[3])
+{
+  i2c_RcvBuf(I2C_ID_HMC5883L,HMC5883L_DEVID,3,id);
+}   // getID().

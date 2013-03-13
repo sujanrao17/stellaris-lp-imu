@@ -36,7 +36,7 @@ void l3g_Config(void) {
 void l3g_ReadXYZRawData(int *pxraw, int* pyraw, int* pzraw) {
 	u08 buf[6];
 	s16 x, y, z;
-	i2c_RcvBuf(I2C_ID_L3G4200D, L3G_OUT_X_L | (1 << 7), 6, buf); //read the acceleration data from the ADXL345
+	i2c_RcvBuf(I2C_ID_L3G4200D, L3G_OUT_X_L | (1 << 7), 6, buf); //read the acceleration data from the L3G4200D
 	// each axis reading comes in 13 bit 2's complement format. lsb first, msb has sign bits extended
 	x = (s16) ((((u16) buf[1]) << 8) | (u16) buf[0]);
 	*pxraw = (int) x;
@@ -76,25 +76,10 @@ void l3g_GetCorrectedData(int xraw, int yraw, int zraw, float* pgcx,
 		float* pgcy, float* pgcz) {
 	int xCorr, yCorr, zCorr;
 	xCorr = xraw - gL3G.calib.xOffset;
-	*pgcx = (
-			ABS(xCorr) > gL3G.xThreshold ?
-					(float) xCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
+	*pgcx = (ABS(xCorr) > gL3G.xThreshold ?(float) xCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
 	yCorr = yraw - gL3G.calib.yOffset;
-	*pgcy = (
-			ABS(yCorr) > gL3G.yThreshold ?
-					(float) yCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
+	*pgcy = (ABS(yCorr) > gL3G.yThreshold ? (float) yCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
 	zCorr = zraw - gL3G.calib.zOffset;
-	*pgcz = (
-			ABS(zCorr) > gL3G.zThreshold ?
-					(float) zCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
+	*pgcz = (ABS(zCorr) > gL3G.zThreshold ?(float) zCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
 }
 
-//void l3g_GetCorrectedData(int xraw, int yraw, int zraw, float* pgcx, float* pgcy, float* pgcz) {
-//    int xCorr,yCorr,zCorr;
-//    xCorr = xraw ;
-//    *pgcx = (ABS(xCorr) > gL3G.xThreshold ? (float)xCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
-//    yCorr = yraw;
-//    *pgcy = (ABS(yCorr) > gL3G.yThreshold ? (float)yCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
-//    zCorr = zraw;
-//    *pgcz = (ABS(zCorr) > gL3G.zThreshold ? (float)zCorr * L3G_SENSITIVITY_0500DPS : 0.0f);
-//    }
